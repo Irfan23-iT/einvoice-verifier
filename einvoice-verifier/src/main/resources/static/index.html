@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>e-Invoice Pre-Flight Verifier</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CSS via CDN (Zero setup required) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+  <!-- Header Banner -->
+  <header class="bg-blue-900 text-white shadow-md">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div>
+        <h1 class="text-xl font-bold tracking-wide">e-Invoice Verification Portal</h1>
+        <p class="text-xs text-blue-200">Enterprise Solutions &bull; LHDN MyInvois Gateway Guard</p>
+      </div>
+      <span class="bg-blue-800 text-blue-100 text-xs px-3 py-1 rounded-full font-mono">v1.1.0-PROD-MOCK</span>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+    <!-- Left Column: Verification Form (7 cols) -->
+    <section class="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-slate-900">Single Invoice Payload</h2>
+        <div class="space-x-2">
+          <button type="button" onclick="loadSample(true)" class="text-xs bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 font-medium px-2.5 py-1.5 rounded transition">
+            Load Valid Invoice
+          </button>
+          <button type="button" onclick="loadSample(false)" class="text-xs bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 font-medium px-2.5 py-1.5 rounded transition">
+            Load Defective Invoice
+          </button>
+        </div>
+      </div>
+
+      <form id="invoiceForm" onsubmit="submitInvoice(event)" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Invoice Number</label>
+            <input type="text" id="invoiceNumber" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer TIN</label>
+            <input type="text" id="buyerTin" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 font-mono">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer Legal Name</label>
+          <input type="text" id="buyerName" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer ID Type</label>
+            <select id="buyerIdType" class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
+              <option value="BRN">BRN (SSM 12-Digit Company)</option>
+              <option value="NRIC">NRIC (Individual 12-Digit)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer ID Value</label>
+            <input type="text" id="buyerIdValue" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 font-mono">
+          </div>
+        </div>
+
+        <!-- Line Item -->
+        <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Item Line 1</span>
+          <div class="grid grid-cols-3 gap-2 mb-2">
+            <div class="col-span-2">
+              <input type="text" id="itemDesc" placeholder="Description" required class="w-full text-xs border border-slate-300 rounded p-2">
+            </div>
+            <div>
+              <input type="number" id="itemQty" step="1" min="1" placeholder="Qty" required class="w-full text-xs border border-slate-300 rounded p-2">
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <input type="number" id="itemPrice" step="0.01" placeholder="Price (RM)" required class="w-full text-xs border border-slate-300 rounded p-2">
+            </div>
+            <div>
+              <input type="number" id="itemSst" step="0.01" placeholder="SST Rate (0.08)" required class="w-full text-xs border border-slate-300 rounded p-2">
+            </div>
+            <div>
+              <input type="number" id="itemLineTotal" step="0.01" placeholder="Line Total (RM)" required class="w-full text-xs border border-slate-300 rounded p-2 font-mono">
+            </div>
+          </div>
+        </div>
+
+        <!-- Header Totals -->
+        <div class="grid grid-cols-3 gap-3 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Subtotal (RM)</label>
+            <input type="number" id="subtotal" step="0.01" required class="w-full text-sm border border-slate-300 rounded-lg p-2 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Total SST (RM)</label>
+            <input type="number" id="totalTax" step="0.01" required class="w-full text-sm border border-slate-300 rounded-lg p-2 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Total Payable (RM)</label>
+            <input type="number" id="totalPayable" step="0.01" required class="w-full text-sm border border-slate-300 rounded-lg p-2 font-mono font-bold text-blue-900">
+          </div>
+        </div>
+
+        <button type="submit" id="btnSubmit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg shadow transition flex justify-center items-center gap-2">
+          <span>Run Verification &amp; Dispatch</span>
+        </button>
+      </form>
+    </section>
+
+    <!-- Right Column: Verification Result Panel (5 cols) -->
+    <section class="lg:col-span-5 space-y-6">
+
+      <!-- Result Card -->
+      <div id="resultCard" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 min-h-[300px] flex flex-col justify-center items-center text-center">
+        <div class="text-slate-400">
+          <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <p class="text-sm font-medium">No invoice verified yet.</p>
+          <p class="text-xs text-slate-400 mt-1">Submit an invoice on the left or load a sample.</p>
+        </div>
+      </div>
+
+      <!-- Quick Metrics -->
+      <div class="bg-slate-900 text-white rounded-xl p-5 shadow-sm">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Gateway Guard Telemetry</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <span class="text-2xl font-bold text-emerald-400" id="metricPassed">0</span>
+            <p class="text-xs text-slate-400 mt-0.5">Certified by LHDN</p>
+          </div>
+          <div>
+            <span class="text-2xl font-bold text-rose-400" id="metricRejected">0</span>
+            <p class="text-xs text-slate-400 mt-0.5">Internally Intercepted</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Batch Sanitizer: Full Width -->
+    <section class="lg:col-span-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900">Batch sanitizer</h2>
+          <p class="text-xs text-slate-500">Drop a billing CSV to scan every row before gateway submission</p>
+        </div>
+        <a href="/sample-billing-batch.csv" download class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition">
+          Download sample CSV
+        </a>
+      </div>
+
+      <div id="dropZone" class="border-2 border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/40 rounded-xl p-8 text-center cursor-pointer transition">
+        <svg class="w-10 h-10 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"></path></svg>
+        <p class="text-sm font-medium text-slate-700">Drag &amp; drop your <span class="font-mono">.csv</span> batch file here</p>
+        <p class="text-xs text-slate-400 mt-1">or click to browse &bull; maximum 5 MB</p>
+        <input type="file" id="csvInput" accept=".csv" class="hidden">
+      </div>
+
+      <div id="batchStatus" class="hidden mt-4 text-sm rounded-lg p-3"></div>
+
+      <div id="batchSummary" class="hidden mt-4"></div>
+
+      <div id="batchResults" class="hidden mt-4 overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 uppercase font-mono border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-3">Row</th>
+              <th class="py-3 px-3">Invoice #</th>
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3">LHDN UUID / Defect Manifest</th>
+            </tr>
+          </thead>
+          <tbody id="batchTableBody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Bottom Full Width: Real-Time Audit Trail -->
+    <section class="lg:col-span-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900">Audit History &amp; LHDN Certificates</h2>
+          <p class="text-xs text-slate-500">Persisted records retrieved from H2 enterprise repository</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="historyFilter" onchange="fetchHistory()" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5">
+            <option value="">All verdicts</option>
+            <option value="CERTIFIED_LHDN">Certified only</option>
+            <option value="REJECTED_INTERNAL">Rejected only</option>
+          </select>
+          <button onclick="fetchHistory()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1">
+            <span>&circlearrowright; Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 uppercase font-mono border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-3">Invoice #</th>
+              <th class="py-3 px-3">Buyer Name</th>
+              <th class="py-3 px-3">Total (RM)</th>
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3">LHDN UUID / Error Details</th>
+              <th class="py-3 px-3">Last Verified</th>
+            </tr>
+          </thead>
+          <tbody id="historyTable" class="divide-y divide-slate-100">
+            <tr><td colspan="6" class="text-center py-4 text-slate-400">Loading audit records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ---------------------------------------------------------------- helpers
+    // Server-provided strings are untrusted: never interpolate them into innerHTML raw.
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function money(value) {
+      const n = parseFloat(value);
+      return isNaN(n) ? '-' : n.toFixed(2);
+    }
+
+    // ------------------------------------------------------- single invoice
+    function loadSample(isValid) {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      if (isValid) {
+        document.getElementById('invoiceNumber').value = 'INV-2026-' + rand;
+        document.getElementById('buyerName').value = 'Syarikat Maju Jaya Sdn Bhd';
+        document.getElementById('buyerIdType').value = 'BRN';
+        document.getElementById('buyerIdValue').value = '202401009876'; // Clean 12 digits
+        document.getElementById('buyerTin').value = 'C2938475610';
+        document.getElementById('itemDesc').value = 'Software Subscription Fee';
+        document.getElementById('itemQty').value = '1';
+        document.getElementById('itemPrice').value = '1000.00';
+        document.getElementById('itemSst').value = '0.08';
+        document.getElementById('itemLineTotal').value = '1080.00';
+        document.getElementById('subtotal').value = '1000.00';
+        document.getElementById('totalTax').value = '80.00';
+        document.getElementById('totalPayable').value = '1080.00';
+      } else {
+        document.getElementById('invoiceNumber').value = 'INV-2026-ERR-' + rand;
+        document.getElementById('buyerName').value = 'Defective Trading Enterprise';
+        document.getElementById('buyerIdType').value = 'BRN';
+        document.getElementById('buyerIdValue').value = '1234567890'; // Defect: 10 digits only
+        document.getElementById('buyerTin').value = 'C1122334455';
+        document.getElementById('itemDesc').value = 'Consulting Services Fee';
+        document.getElementById('itemQty').value = '1';
+        document.getElementById('itemPrice').value = '1000.00';
+        document.getElementById('itemSst').value = '0.08';
+        document.getElementById('itemLineTotal').value = '1080.00';
+        document.getElementById('subtotal').value = '1000.00';
+        document.getElementById('totalTax').value = '80.00';
+        document.getElementById('totalPayable').value = '1080.01'; // Defect: 1-sen arithmetic mismatch
+      }
+    }
+
+    async function submitInvoice(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmit');
+      const payload = {
+        invoiceNumber: document.getElementById('invoiceNumber').value,
+        buyerName: document.getElementById('buyerName').value,
+        buyerIdType: document.getElementById('buyerIdType').value,
+        buyerIdValue: document.getElementById('buyerIdValue').value,
+        buyerTin: document.getElementById('buyerTin').value,
+        items: [{
+          description: document.getElementById('itemDesc').value,
+          quantity: parseFloat(document.getElementById('itemQty').value),
+          unitPrice: parseFloat(document.getElementById('itemPrice').value),
+          sstRate: parseFloat(document.getElementById('itemSst').value),
+          lineTotal: parseFloat(document.getElementById('itemLineTotal').value)
+        }],
+        subtotal: parseFloat(document.getElementById('subtotal').value),
+        totalTax: parseFloat(document.getElementById('totalTax').value),
+        totalPayable: parseFloat(document.getElementById('totalPayable').value)
+      };
+
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/einvoice/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        renderResult(data);
+        fetchHistory();
+      } catch (err) {
+        renderResult({ status: 'REJECTED_INTERNAL', invoiceNumber: payload.invoiceNumber,
+          errors: ['Transport failure: ' + err.message] });
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderResult(data) {
+      const card = document.getElementById('resultCard');
+      const status = data.status || 'REJECTED_INTERNAL';
+      const errors = Array.isArray(data.errors) ? data.errors : [];
+
+      if (status.startsWith('CERTIFIED_LHDN')) {
+        card.className = 'bg-emerald-50 rounded-xl shadow-sm border border-emerald-200 p-6 text-left';
+        card.innerHTML = `
+          <div class="flex items-center gap-2 text-emerald-800 font-bold mb-2">
+            <span class="text-xl">&check;</span>
+            <span>VERIFIED &amp; CERTIFIED BY LHDN</span>
+          </div>
+          <p class="text-xs text-emerald-700 font-mono mb-3">Invoice: ${escapeHtml(data.invoiceNumber)}</p>
+          <div class="bg-white p-3 rounded-lg border border-emerald-200 text-xs font-mono space-y-1">
+            <p class="text-slate-500 font-sans">Official LHDN Clearance Identifier:</p>
+            <p class="text-emerald-900 font-bold break-all">${escapeHtml(data.lhdnUuid)}</p>
+          </div>
+          <div class="bg-white p-3 rounded-lg border border-emerald-200 text-xs font-mono mt-2">
+            <p class="text-slate-500 font-sans">QR Validation URL:</p>
+            <p class="text-emerald-900 break-all">${escapeHtml(data.qrCodeUrl)}</p>
+          </div>
+        `;
+      } else {
+        const count = errors.length;
+        card.className = 'bg-rose-50 rounded-xl shadow-sm border border-rose-200 p-6 text-left';
+        card.innerHTML = `
+          <div class="flex items-center gap-2 text-rose-800 font-bold mb-2">
+            <span class="text-xl">&cross;</span>
+            <span>PRE-SUBMISSION REJECTION (${count} Error${count === 1 ? '' : 's'})</span>
+          </div>
+          <p class="text-xs text-rose-700 font-mono mb-3">Invoice: ${escapeHtml(data.invoiceNumber)}</p>
+          <div class="space-y-1.5">
+            ${errors.map(err => `
+              <div class="bg-white p-2.5 rounded border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+                <span class="text-rose-500 font-bold mt-0.5">&bull;</span>
+                <span>${escapeHtml(err)}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+
+    // -------------------------------------------------------- batch sanitizer
+    const dropZone = document.getElementById('dropZone');
+    const csvInput = document.getElementById('csvInput');
+
+    dropZone.addEventListener('click', () => csvInput.click());
+    csvInput.addEventListener('change', () => {
+      if (csvInput.files.length) uploadBatchFile(csvInput.files[0]);
+      csvInput.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach(evt => dropZone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropZone.classList.add('border-blue-500', 'bg-blue-50/40');
+    }));
+
+    ['dragleave', 'drop'].forEach(evt => dropZone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropZone.classList.remove('border-blue-500', 'bg-blue-50/40');
+    }));
+
+    dropZone.addEventListener('drop', e => {
+      const file = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files[0] : null;
+      if (file) uploadBatchFile(file);
+    });
+
+    function setBatchStatus(message, tone) {
+      const el = document.getElementById('batchStatus');
+      const tones = {
+        info: 'bg-blue-50 text-blue-800 border border-blue-200',
+        error: 'bg-rose-50 text-rose-800 border border-rose-200'
+      };
+      el.className = 'mt-4 text-sm rounded-lg p-3 ' + (tones[tone] || tones.info);
+      el.textContent = message;
+    }
+
+    async function uploadBatchFile(file) {
+      if (!file) return;
+      document.getElementById('batchSummary').classList.add('hidden');
+      document.getElementById('batchResults').classList.add('hidden');
+      setBatchStatus('Scanning ' + file.name + ' through the pre-flight gatekeeper...', 'info');
+
+      const form = new FormData();
+      form.append('file', file);
+
+      try {
+        const res = await fetch('/api/einvoice/upload-batch', { method: 'POST', body: form });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setBatchStatus(data.message || data.detail || data.error || 'Batch rejected by the sanitiser.', 'error');
+          return;
+        }
+        renderBatch(data);
+        fetchHistory();
+      } catch (err) {
+        setBatchStatus('Transport failure: ' + err.message, 'error');
+      }
+    }
+
+    function renderBatch(data) {
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      setBatchStatus('Scanned ' + data.totalRows + ' row(s) from ' + data.fileName + '.', 'info');
+
+      document.getElementById('batchSummary').className = 'mt-4 grid grid-cols-3 gap-4';
+      document.getElementById('batchSummary').innerHTML = `
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+          <span class="text-2xl font-bold text-slate-800">${data.totalRows}</span>
+          <p class="text-xs text-slate-500 mt-0.5">Rows scanned</p>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+          <span class="text-2xl font-bold text-emerald-700">${data.certified}</span>
+          <p class="text-xs text-emerald-600 mt-0.5">Certified</p>
+        </div>
+        <div class="bg-rose-50 border border-rose-200 rounded-lg p-4 text-center">
+          <span class="text-2xl font-bold text-rose-700">${data.rejected}</span>
+          <p class="text-xs text-rose-600 mt-0.5">Intercepted</p>
+        </div>
+      `;
+
+      const tbody = document.getElementById('batchTableBody');
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400">The uploaded file contained no data rows.</td></tr>';
+        document.getElementById('batchResults').classList.remove('hidden');
+        return;
+      }
+
+      tbody.innerHTML = rows.map(r => {
+        const certified = r.status === 'CERTIFIED_LHDN';
+        const detail = certified ? r.lhdnUuid : (Array.isArray(r.errors) ? r.errors.join(' | ') : '');
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-3 font-mono text-slate-500">#${r.row}</td>
+            <td class="py-2.5 px-3 font-mono font-medium">${escapeHtml(r.invoiceNumber) || '-'}</td>
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${certified ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                ${escapeHtml(r.status)}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 max-w-md font-mono text-[11px] text-slate-600 break-all">${escapeHtml(detail)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('batchResults').classList.remove('hidden');
+    }
+
+    // ----------------------------------------------------------- audit trail
+    async function fetchHistory() {
+      const filter = document.getElementById('historyFilter').value;
+      const url = '/api/einvoice/history' + (filter ? '?status=' + encodeURIComponent(filter) : '');
+
+      let list = [];
+      try {
+        const res = await fetch(url);
+        list = await res.json();
+      } catch (err) {
+        list = [];
+      }
+
+      const tbody = document.getElementById('historyTable');
+      if (!Array.isArray(list) || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400">No records found.</td></tr>';
+        updateMetrics([]);
+        return;
+      }
+
+      tbody.innerHTML = list.map(r => {
+        const isPassed = r.status === 'CERTIFIED_LHDN';
+        const detail = isPassed ? r.lhdnUuid : r.errorManifest;
+        const attempts = r.attemptCount > 1 ? ' &bull; ' + r.attemptCount + ' attempts' : '';
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-3 font-mono font-medium">${escapeHtml(r.invoiceNumber)}</td>
+            <td class="py-2.5 px-3">${escapeHtml(r.buyerName) || '-'}</td>
+            <td class="py-2.5 px-3 font-mono">RM ${money(r.totalPayable)}</td>
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                ${escapeHtml(r.status)}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 max-w-xs truncate font-mono text-[11px] text-slate-600" title="${escapeHtml(detail)}">
+              ${escapeHtml(detail)}
+            </td>
+            <td class="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+              ${new Date(r.lastVerifiedAt || r.createdAt).toLocaleTimeString()}${attempts}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      updateMetrics(list);
+    }
+
+    function updateMetrics(list) {
+      const passed = list.filter(r => r.status === 'CERTIFIED_LHDN').length;
+      document.getElementById('metricPassed').innerText = passed;
+      document.getElementById('metricRejected').innerText = list.length - passed;
+    }
+
+    // Auto load a clean sample on page load
+    loadSample(true);
+    fetchHistory();
+  </script>
+</body>
+</html>

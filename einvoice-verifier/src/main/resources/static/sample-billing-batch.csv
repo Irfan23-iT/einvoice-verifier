@@ -1,0 +1,5 @@
+invoiceNumber,buyerName,buyerIdType,buyerIdValue,buyerTin,desc,qty,price,sstRate,lineTotal,subtotal,totalTax,totalPayable
+INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,C1029384750,Trade Facility Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00
+INV-2026-002,Koperasi Jaya,BRN,1234567890,C9988776655,Admin Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00
+INV-2026-003,Syarikat Maju Jaya Sdn Bhd,BRN,202401009876,C2938475610,Software Subscription Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00
+INV-2026-004,Defective Trading Enterprise,BRN,202401001234,C1122334455,Consulting Services Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.01

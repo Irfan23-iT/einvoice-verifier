@@ -1,0 +1,55 @@
+package io.github.irfan23it.einvoiceverifier.controller;
+
+import io.github.irfan23it.einvoiceverifier.dto.BatchUploadResponse;
+import io.github.irfan23it.einvoiceverifier.dto.InvoiceRequest;
+import io.github.irfan23it.einvoiceverifier.dto.VerificationResponse;
+import io.github.irfan23it.einvoiceverifier.entity.InvoiceAuditRecord;
+import io.github.irfan23it.einvoiceverifier.service.InvoiceVerificationService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
+import java.util.Locale;
+
+@RestController
+@RequestMapping("/api/einvoice")
+public class InvoiceController {
+
+    private final InvoiceVerificationService verificationService;
+
+    public InvoiceController(InvoiceVerificationService verificationService) {
+        this.verificationService = verificationService;
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<VerificationResponse> verify(@RequestBody InvoiceRequest request) {
+        return ResponseEntity.ok(verificationService.verifyAndProcess(request));
+    }
+
+    @PostMapping(value = "/upload-batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<BatchUploadResponse> uploadBatch(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No CSV file was uploaded.");
+        }
+        String fileName = file.getOriginalFilename();
+        if (fileName == null || !fileName.toLowerCase(Locale.ROOT).endsWith(".csv")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only .csv billing files are accepted.");
+        }
+
+        try {
+            return ResponseEntity.ok(verificationService.processBatch(file));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<InvoiceAuditRecord>> getAuditHistory(
+            @RequestParam(name = "status", required = false) String status) {
+        return ResponseEntity.ok(verificationService.getAuditRecords(status));
+    }
+}
