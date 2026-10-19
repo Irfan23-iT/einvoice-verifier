@@ -1,5 +1,6 @@
 package io.github.irfan23it.einvoiceverifier.service;
 
+import io.github.irfan23it.einvoiceverifier.config.EinvoiceProperties;
 import io.github.irfan23it.einvoiceverifier.dto.BatchRowResult;
 import io.github.irfan23it.einvoiceverifier.dto.BatchUploadResponse;
 import io.github.irfan23it.einvoiceverifier.dto.InvoiceRequest;
@@ -20,11 +21,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class InvoiceVerificationService {
 
-    private static final Pattern NUMERIC_12_DIGIT = Pattern.compile("^[0-9]{12}$");
     private static final String STATUS_REJECTED = "REJECTED_INTERNAL";
     private static final String STATUS_CERTIFIED = "CERTIFIED_LHDN";
 
@@ -32,12 +33,38 @@ public class InvoiceVerificationService {
     private final CsvInvoiceBatchParser csvParser;
     private final Validator validator;
 
+    private final Pattern tinPattern;
+    private final String tinPatternText;
+    private final Pattern buyerIdPattern;
+    private final String buyerIdPatternText;
+    private final List<BigDecimal> allowedSstRates;
+    private final String allowedSstRatesText;
+    private final int maxBatchRows;
+    private final String uuidPrefix;
+    private final String qrBaseUrl;
+
     public InvoiceVerificationService(InvoiceAuditRepository repository,
                                       CsvInvoiceBatchParser csvParser,
-                                      Validator validator) {
+                                      Validator validator,
+                                      EinvoiceProperties properties) {
         this.repository = repository;
         this.csvParser = csvParser;
         this.validator = validator;
+
+        EinvoiceProperties.Rules rules = properties.rules();
+        this.tinPattern = Pattern.compile(rules.tinPattern());
+        this.tinPatternText = rules.tinPattern();
+        this.buyerIdPattern = Pattern.compile(rules.buyerIdPattern());
+        this.buyerIdPatternText = rules.buyerIdPattern();
+        this.allowedSstRates = List.copyOf(rules.allowedSstRates());
+        this.allowedSstRatesText = this.allowedSstRates.stream()
+            .map(BigDecimal::toPlainString)
+            .collect(Collectors.joining(", "));
+        this.maxBatchRows = rules.maxBatchRows();
+
+        EinvoiceProperties.Gateway gateway = properties.gateway();
+        this.uuidPrefix = gateway.uuidPrefix();
+        this.qrBaseUrl = gateway.qrBaseUrl();
     }
 
     @Transactional
@@ -51,17 +78,25 @@ public class InvoiceVerificationService {
 
         // 2. Identity / format rules. Guarded so that a structurally invalid payload never
         //    triggers a NullPointerException further down.
+        if (notBlank(invoice.buyerTin()) && !tinPattern.matcher(invoice.buyerTin().trim()).matches()) {
+            errors.add("Format Error: buyerTin does not match the required Malaysian TIN format ("
+                + tinPatternText + "), received: '" + invoice.buyerTin() + "'");
+        }
+
         if (notBlank(invoice.buyerIdType())) {
             if ("BRN".equalsIgnoreCase(invoice.buyerIdType()) || "NRIC".equalsIgnoreCase(invoice.buyerIdType())) {
                 if (invoice.buyerIdValue() == null
-                        || !NUMERIC_12_DIGIT.matcher(invoice.buyerIdValue().trim()).matches()) {
+                        || !buyerIdPattern.matcher(invoice.buyerIdValue().trim()).matches()) {
                     errors.add("Format Error: " + invoice.buyerIdType()
-                        + " must be exactly 12 numeric digits (Received: " + invoice.buyerIdValue() + ")");
+                        + " does not match the required identity format (" + buyerIdPatternText
+                        + "), received: '" + invoice.buyerIdValue() + "'");
                 }
             } else {
                 errors.add("Invalid buyerIdType: Must be either 'BRN' or 'NRIC'.");
             }
         }
+
+        errors.addAll(checkServiceTaxRates(invoice.items()));
 
         // 3. Sen-level arithmetic. Only attempted once every line item and header amount is
         //    present, otherwise the comparison would report spurious mismatches.
@@ -105,8 +140,8 @@ public class InvoiceVerificationService {
         }
 
         // 4. Simulated LHDN MyInvois clearance gateway call.
-        String lhdnUuid = "LHDN-MYINVOIS-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
-        String qrCodeUrl = "https://myinvois.hasil.gov.my/taxpayer/validate/" + lhdnUuid;
+        String lhdnUuid = uuidPrefix + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
+        String qrCodeUrl = qrBaseUrl + lhdnUuid;
 
         persist(invoice, STATUS_CERTIFIED, "NONE", lhdnUuid, qrCodeUrl);
         return VerificationResponse.certified(invoice.invoiceNumber(), lhdnUuid, qrCodeUrl);
@@ -119,6 +154,11 @@ public class InvoiceVerificationService {
     @Transactional
     public BatchUploadResponse processBatch(MultipartFile file) {
         List<CsvInvoiceBatchParser.ParsedRow> parsedRows = csvParser.parse(file);
+
+        if (parsedRows.size() > maxBatchRows) {
+            throw new IllegalArgumentException("Batch contains " + parsedRows.size()
+                + " row(s), which exceeds the configured limit of " + maxBatchRows + ".");
+        }
 
         List<BatchRowResult> results = new ArrayList<>();
         int certified = 0;
@@ -152,6 +192,26 @@ public class InvoiceVerificationService {
             return repository.findAllByOrderByIdDesc();
         }
         return repository.findByStatusOrderByIdDesc(status.trim().toUpperCase(Locale.ROOT));
+    }
+
+    /** Rejects any line whose service tax rate is not on the approved schedule. */
+    private List<String> checkServiceTaxRates(List<LineItemRequest> items) {
+        if (items == null) {
+            return List.of();
+        }
+        List<String> violations = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            LineItemRequest item = items.get(i);
+            if (item == null || item.sstRate() == null) {
+                continue;
+            }
+            boolean approved = allowedSstRates.stream().anyMatch(rate -> rate.compareTo(item.sstRate()) == 0);
+            if (!approved) {
+                violations.add("Rule Violation at Item " + (i + 1) + " (" + item.description() + "): sstRate "
+                    + item.sstRate() + " is not an approved Malaysian SST rate (allowed: " + allowedSstRatesText + ")");
+            }
+        }
+        return violations;
     }
 
     private VerificationResponse reject(InvoiceRequest invoice, List<String> errors) {

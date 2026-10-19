@@ -1,5 +1,6 @@
 package io.github.irfan23it.einvoiceverifier.service;
 
+import io.github.irfan23it.einvoiceverifier.config.EinvoiceProperties;
 import io.github.irfan23it.einvoiceverifier.dto.BatchRowResult;
 import io.github.irfan23it.einvoiceverifier.dto.BatchUploadResponse;
 import io.github.irfan23it.einvoiceverifier.entity.InvoiceAuditRecord;
@@ -28,13 +29,17 @@ class InvoiceBatchSanitizerTest {
     private static final String HEADER =
         "invoiceNumber,buyerName,buyerIdType,buyerIdValue,buyerTin,desc,qty,price,sstRate,lineTotal,subtotal,totalTax,totalPayable";
 
+    private static final String CLEAN_ROW =
+        "INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,102938475010,Trade Facility Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00";
+
     private final CsvInvoiceBatchParser parser = new CsvInvoiceBatchParser();
     private final Map<String, InvoiceAuditRecord> store = new HashMap<>();
+    private InvoiceAuditRepository repository;
     private InvoiceVerificationService service;
 
     @BeforeEach
     void setUp() {
-        InvoiceAuditRepository repository = mock(InvoiceAuditRepository.class);
+        repository = mock(InvoiceAuditRepository.class);
         when(repository.findByInvoiceNumber(anyString()))
             .thenAnswer(invocation -> Optional.ofNullable(store.get(invocation.getArgument(0))));
         when(repository.save(any(InvoiceAuditRecord.class)))
@@ -43,8 +48,12 @@ class InvoiceBatchSanitizerTest {
                 store.put(record.getInvoiceNumber(), record);
                 return record;
             });
-        service = new InvoiceVerificationService(repository, parser,
-            Validation.buildDefaultValidatorFactory().getValidator());
+        service = serviceWith(new EinvoiceProperties(null, null));
+    }
+
+    private InvoiceVerificationService serviceWith(EinvoiceProperties properties) {
+        return new InvoiceVerificationService(repository, parser,
+            Validation.buildDefaultValidatorFactory().getValidator(), properties);
     }
 
     private static MockMultipartFile csv(String... rows) {
@@ -58,8 +67,7 @@ class InvoiceBatchSanitizerTest {
     @Test
     @DisplayName("A well-formed row materialises into an invoice request")
     void wellFormedRowIsParsed() {
-        List<CsvInvoiceBatchParser.ParsedRow> rows = parser.parse(csv(
-            "INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,C1029384750,Trade Facility Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00"));
+        List<CsvInvoiceBatchParser.ParsedRow> rows = parser.parse(csv(CLEAN_ROW));
 
         assertThat(rows).hasSize(1);
         CsvInvoiceBatchParser.ParsedRow row = rows.get(0);
@@ -83,7 +91,7 @@ class InvoiceBatchSanitizerTest {
     @DisplayName("A non-numeric cell is reported without aborting the file")
     void nonNumericCellIsReported() {
         List<CsvInvoiceBatchParser.ParsedRow> rows = parser.parse(csv(
-            "INV-2026-003,Broken Sdn Bhd,BRN,202401001234,C1122334455,Fee,1,not-a-number,0.08,1080.00,1000.00,80.00,1080.00"));
+            "INV-2026-003,Broken Sdn Bhd,BRN,202401001234,112233445566,Fee,1,not-a-number,0.08,1080.00,1000.00,80.00,1080.00"));
 
         CsvInvoiceBatchParser.ParsedRow row = rows.get(0);
         assertThat(row.request()).isNull();
@@ -107,10 +115,10 @@ class InvoiceBatchSanitizerTest {
     @DisplayName("A mixed batch splits into certified and intercepted rows")
     void mixedBatchIsSanitized() {
         BatchUploadResponse response = service.processBatch(csv(
-            "INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,C1029384750,Trade Facility Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00",
-            "INV-2026-002,Koperasi Jaya,BRN,1234567890,C9988776655,Admin Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
-            "INV-2026-003,Syarikat Maju Jaya Sdn Bhd,BRN,202401009876,C2938475610,Financing Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
-            "INV-2026-004,Defective Trading Enterprise,BRN,202401001234,C1122334455,Guarantee Charge,1,1000.00,0.08,1080.00,1000.00,80.00,1080.01"));
+            CLEAN_ROW,
+            "INV-2026-002,Koperasi Jaya,BRN,1234567890,998877665544,Admin Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
+            "INV-2026-003,Syarikat Maju Jaya Sdn Bhd,BRN,202401009876,293847561012,Financing Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
+            "INV-2026-004,Defective Trading Enterprise,BRN,202401001234,112233445566,Guarantee Charge,1,1000.00,0.08,1080.00,1000.00,80.00,1080.01"));
 
         assertThat(response.totalRows()).isEqualTo(4);
         assertThat(response.certified()).isEqualTo(2);
@@ -118,7 +126,7 @@ class InvoiceBatchSanitizerTest {
 
         BatchRowResult legacyBrn = response.rows().get(1);
         assertThat(legacyBrn.status()).isEqualTo("REJECTED_INTERNAL");
-        assertThat(legacyBrn.errors()).anyMatch(e -> e.contains("exactly 12 numeric digits"));
+        assertThat(legacyBrn.errors()).anyMatch(e -> e.contains("does not match the required identity format"));
 
         BatchRowResult oneSen = response.rows().get(3);
         assertThat(oneSen.errors()).anyMatch(e -> e.contains("Total Payable Mismatch"));
@@ -128,8 +136,8 @@ class InvoiceBatchSanitizerTest {
     @DisplayName("Malformed rows are persisted as rejections alongside clean rows")
     void malformedRowsArePersisted() {
         service.processBatch(csv(
-            "INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,C1029384750,Trade Facility Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00",
-            "INV-2026-009,Broken Sdn Bhd,BRN,202401001234,C1122334455,Fee,1,oops,0.08,1080.00,1000.00,80.00,1080.00"));
+            CLEAN_ROW,
+            "INV-2026-009,Broken Sdn Bhd,BRN,202401001234,112233445566,Fee,1,oops,0.08,1080.00,1000.00,80.00,1080.00"));
 
         assertThat(store).containsKeys("INV-2026-001", "INV-2026-009");
         assertThat(store.get("INV-2026-009").getStatus()).isEqualTo("REJECTED_INTERNAL");
@@ -140,9 +148,24 @@ class InvoiceBatchSanitizerTest {
     @DisplayName("Rows without an invoice number are reported but not persisted")
     void rowsWithoutInvoiceNumberAreNotPersisted() {
         BatchUploadResponse response = service.processBatch(csv(
-            ",Nameless Sdn Bhd,BRN,202401001234,C1122334455,Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00"));
+            ",Nameless Sdn Bhd,BRN,202401001234,112233445566,Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00"));
 
         assertThat(response.rejected()).isEqualTo(1);
+        assertThat(store).isEmpty();
+    }
+
+    @Test
+    @DisplayName("A batch larger than the configured limit is rejected before processing")
+    void batchExceedingRowLimitIsRejected() {
+        InvoiceVerificationService limited = serviceWith(
+            new EinvoiceProperties(new EinvoiceProperties.Rules(null, null, null, 1), null));
+
+        assertThatThrownBy(() -> limited.processBatch(csv(
+            CLEAN_ROW,
+            "INV-2026-003,Syarikat Maju Jaya Sdn Bhd,BRN,202401009876,293847561012,Financing Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("exceeds the configured limit of 1");
+
         assertThat(store).isEmpty();
     }
 }
