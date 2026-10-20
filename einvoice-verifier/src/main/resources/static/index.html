@@ -1,219 +1,364 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
   <title>e-Invoice Pre-Flight Verifier</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Tailwind CSS via CDN (Zero setup required) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef4ff', 100: '#dbe6ff', 200: '#bed0ff', 300: '#92b0ff',
+              400: '#5f86fc', 500: '#3a61f5', 600: '#2743e8', 700: '#1f33cf',
+              800: '#1f2ea7', 900: '#1e2c83', 950: '#111a45'
+            }
+          },
+          boxShadow: {
+            card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
+            lift: '0 18px 40px -24px rgb(15 23 42 / 0.35)'
+          }
+        }
+      }
+    };
+  </script>
+  <style type="text/tailwindcss">
+    @layer components {
+      .card { @apply rounded-xl border border-slate-200 bg-white shadow-card; }
+      .label { @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500; }
+      .field { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10; }
+      .field-sm { @apply w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 shadow-sm transition placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10; }
+      .hint { @apply mt-1 text-[11px] leading-relaxed text-slate-500; }
+      .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60; }
+      .btn-primary { @apply bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800; }
+      .btn-soft { @apply bg-slate-100 text-slate-700 hover:bg-slate-200; }
+      .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider; }
+      .tnum { font-variant-numeric: tabular-nums; }
+      #dropZone.is-dragging { @apply border-brand-500 bg-brand-50; }
+    }
+  </style>
+  <style>
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+  </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen">
+<body class="min-h-full bg-slate-50 font-sans text-slate-800 antialiased">
 
-  <!-- Header Banner -->
-  <header class="bg-blue-900 text-white shadow-md">
-    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-      <div>
-        <h1 class="text-xl font-bold tracking-wide">e-Invoice Verification Portal</h1>
-        <p class="text-xs text-blue-200">Enterprise Solutions &bull; LHDN MyInvois Gateway Guard</p>
+  <!-- Header -->
+  <header class="sticky top-0 z-30 border-b border-white/10 bg-brand-950/95 text-white backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3.5">
+      <div class="flex items-center gap-3">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-brand-100 ring-1 ring-inset ring-white/15">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M7.5 3.75h6l4.5 4.5v10.5a1.5 1.5 0 0 1-1.5 1.5H7.5a1.5 1.5 0 0 1-1.5-1.5V5.25a1.5 1.5 0 0 1 1.5-1.5Z"/>
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-sm font-semibold tracking-wide sm:text-base">e-Invoice Verification Portal</h1>
+          <p class="text-[11px] text-brand-200">LHDN MyInvois pre-flight gatekeeper</p>
+        </div>
       </div>
-      <span class="bg-blue-800 text-blue-100 text-xs px-3 py-1 rounded-full font-mono">v1.1.0-PROD-MOCK</span>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <span id="gatewayStatus" class="inline-flex items-center gap-1.5 rounded-full bg-slate-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-300 ring-1 ring-inset ring-white/10">&#9679; Connecting</span>
+        <a href="/swagger-ui.html" target="_blank" rel="noopener" class="hidden items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-brand-100 ring-1 ring-inset ring-white/10 transition hover:bg-white/10 sm:inline-flex">
+          API docs
+          <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6 6.75v10.5A.75.75 0 0 0 6.75 18h10.5"/></svg>
+        </a>
+        <span class="hidden rounded-md bg-white/5 px-2.5 py-1 font-mono text-[11px] text-brand-200 ring-1 ring-inset ring-white/10 sm:inline">v1.1.0</span>
+      </div>
     </div>
   </header>
 
-  <!-- Executive KPI Summary Cards -->
-  <section class="max-w-6xl mx-auto px-6 pt-8">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Total Audited</div>
-        <div class="mt-2 flex items-baseline justify-between gap-2">
-          <div id="kpi-total" class="text-2xl font-bold text-slate-900">0</div>
-          <div id="kpi-gross" class="text-xs text-slate-500 font-medium font-mono whitespace-nowrap">RM 0.00</div>
+  <!-- KPI summary -->
+  <section class="mx-auto max-w-6xl px-6 pt-6">
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+      <h2 class="text-sm font-semibold tracking-tight text-slate-900">Executive summary</h2>
+      <p class="font-mono text-[10px] text-slate-500">GET /api/einvoice/metrics</p>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Total audited</p>
+            <p id="kpi-total" class="tnum mt-2 text-3xl font-semibold tracking-tight text-slate-900">0</p>
+          </div>
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h7.5M8.25 10.5h7.5M8.25 14.25h4.5M6 3.75h9.75L19.5 7.5v12a.75.75 0 0 1-.75.75H6a.75.75 0 0 1-.75-.75V4.5A.75.75 0 0 1 6 3.75Z"/></svg>
+          </span>
+        </div>
+        <p id="kpi-gross" class="tnum mt-3 text-xs font-medium text-slate-500">RM 0.00 total value</p>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Pre-flight clearance</p>
+            <p id="kpi-clearance" class="tnum mt-2 text-3xl font-semibold tracking-tight text-emerald-600">0.0%</p>
+          </div>
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M12 3.75c2.6 1.6 5 2.25 7.5 2.25 0 5.1-1.9 9.7-7.5 12-5.6-2.3-7.5-6.9-7.5-12 2.5 0 4.9-.65 7.5-2.25Z"/></svg>
+          </span>
+        </div>
+        <div class="mt-3">
+          <span id="kpi-clearance-badge" class="badge bg-slate-100 text-slate-600">Awaiting volume</span>
         </div>
       </div>
 
-      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Pre-Flight Clearance</div>
-        <div class="mt-2 flex items-baseline justify-between gap-2">
-          <div id="kpi-clearance" class="text-2xl font-bold text-emerald-600">0.0%</div>
-          <div id="kpi-clearance-badge" class="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-medium whitespace-nowrap">Awaiting Volume</div>
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Defects intercepted</p>
+            <p id="kpi-defects" class="tnum mt-2 text-3xl font-semibold tracking-tight text-rose-600">0</p>
+          </div>
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.5h.008v.008H12v-.008ZM10.34 3.99 2.7 17.4A1.5 1.5 0 0 0 4 19.65h16a1.5 1.5 0 0 0 1.3-2.25L13.66 3.99a1.5 1.5 0 0 0-2.6 0Z"/></svg>
+          </span>
         </div>
+        <p class="mt-3 text-xs font-medium text-slate-500">Stopped before gateway dispatch</p>
       </div>
 
-      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Defects Intercepted</div>
-        <div class="mt-2 flex items-baseline justify-between gap-2">
-          <div id="kpi-defects" class="text-2xl font-bold text-rose-600">0</div>
-          <div class="text-[10px] text-rose-700 bg-rose-50 px-2 py-0.5 rounded font-medium whitespace-nowrap">Rejected</div>
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Sen-drifts caught</p>
+            <p id="kpi-sendrift" class="tnum mt-2 text-3xl font-semibold tracking-tight text-amber-600">0</p>
+          </div>
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18M7.5 7.5h6.75a2.25 2.25 0 0 1 0 4.5H8.25a2.25 2.25 0 0 0 0 4.5h7.5"/></svg>
+          </span>
         </div>
+        <p class="mt-3 text-xs font-medium text-slate-500">Arithmetic mismatches at &#177;0.01</p>
       </div>
 
-      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Sen-Drifts Caught</div>
-        <div class="mt-2 flex items-baseline justify-between gap-2">
-          <div id="kpi-sendrift" class="text-2xl font-bold text-amber-600">0</div>
-          <div class="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium whitespace-nowrap">&plusmn;0.01 Drift</div>
-        </div>
-      </div>
     </div>
   </section>
 
-  <!-- Main Container -->
-  <main class="max-w-6xl mx-auto px-6 pb-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+  <!-- Main -->
+  <main class="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-6 py-6 lg:grid-cols-12">
 
-    <!-- Left Column: Verification Form (7 cols) -->
-    <section class="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-lg font-semibold text-slate-900">Single Invoice Payload</h2>
-        <div class="space-x-2">
-          <button type="button" onclick="loadSample(true)" class="text-xs bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 font-medium px-2.5 py-1.5 rounded transition">
-            Load Valid Invoice
-          </button>
-          <button type="button" onclick="loadSample(false)" class="text-xs bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 font-medium px-2.5 py-1.5 rounded transition">
-            Load Defective Invoice
-          </button>
+    <!-- Single invoice -->
+    <section class="card p-6 lg:col-span-7">
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+        <div>
+          <h2 class="text-base font-semibold tracking-tight text-slate-900">Single invoice</h2>
+          <p class="mt-0.5 text-xs text-slate-500">Validate one payload against the statutory pre-flight rules.</p>
+        </div>
+        <div class="inline-flex rounded-lg bg-slate-100 p-0.5" role="group" aria-label="Load a sample payload">
+          <button type="button" onclick="loadSample(true)" class="rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-white hover:text-emerald-700 hover:shadow-sm">Valid sample</button>
+          <button type="button" onclick="loadSample(false)" class="rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-white hover:text-rose-700 hover:shadow-sm">Defective sample</button>
         </div>
       </div>
 
-      <form id="invoiceForm" onsubmit="submitInvoice(event)" class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Invoice Number</label>
-            <input type="text" id="invoiceNumber" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 font-mono">
+      <form id="invoiceForm" onsubmit="submitInvoice(event)" class="mt-5 space-y-5">
+
+        <fieldset class="space-y-4">
+          <legend class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Buyer identity</legend>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="invoiceNumber" class="label">Invoice number</label>
+              <input type="text" id="invoiceNumber" required placeholder="INV-2026-0001" class="field font-mono">
+            </div>
+            <div>
+              <label for="buyerTin" class="label">Buyer TIN</label>
+              <input type="text" id="buyerTin" required placeholder="C2938475610" class="field font-mono">
+              <p class="hint">Optional prefix C, IG, SG, OG, D, PT or CS, then 10&#8211;12 digits.</p>
+            </div>
           </div>
+
           <div>
-            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer TIN</label>
-            <input type="text" id="buyerTin" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 font-mono">
+            <label for="buyerName" class="label">Buyer legal name</label>
+            <input type="text" id="buyerName" required placeholder="Syarikat Maju Jaya Sdn Bhd" class="field">
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="buyerIdType" class="label">Buyer ID type</label>
+              <select id="buyerIdType" class="field">
+                <option value="BRN">BRN &#8212; SSM 12-digit company</option>
+                <option value="NRIC">NRIC &#8212; individual, 12 digits</option>
+              </select>
+            </div>
+            <div>
+              <label for="buyerIdValue" class="label">Buyer ID value</label>
+              <input type="text" id="buyerIdValue" required placeholder="202401009876" class="field font-mono">
+              <p class="hint">Exactly 12 digits for both BRN and NRIC.</p>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Line item 1</span>
+            <span class="font-mono text-[10px] text-slate-500">SST 0.00 &#183; 0.06 &#183; 0.08</span>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <div class="sm:col-span-2 lg:col-span-4">
+              <label for="itemDesc" class="label">Description</label>
+              <input type="text" id="itemDesc" required placeholder="Wholesale business financing fee" class="field-sm">
+            </div>
+            <div class="lg:col-span-2">
+              <label for="itemQty" class="label">Quantity</label>
+              <input type="number" id="itemQty" step="1" min="1" required placeholder="1" class="field-sm tnum text-right">
+            </div>
+            <div class="lg:col-span-2">
+              <label for="itemPrice" class="label">Unit price</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-[11px] font-medium text-slate-500">RM</span>
+                <input type="number" id="itemPrice" step="0.01" required placeholder="0.00" class="field-sm tnum pl-8 text-right">
+              </div>
+            </div>
+            <div class="lg:col-span-2">
+              <label for="itemSst" class="label">SST rate</label>
+              <input type="number" id="itemSst" step="0.01" min="0" required placeholder="0.08" class="field-sm tnum text-right">
+            </div>
+            <div class="lg:col-span-2">
+              <label for="itemLineTotal" class="label">Line total</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-[11px] font-medium text-slate-500">RM</span>
+                <input type="number" id="itemLineTotal" step="0.01" required placeholder="0.00" class="field-sm tnum pl-8 text-right font-semibold">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 p-4">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Invoice totals</span>
+            <span class="text-[10px] text-slate-500">Re-verified at sen precision</span>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label for="subtotal" class="label">Subtotal</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[11px] font-medium text-slate-500">RM</span>
+                <input type="number" id="subtotal" step="0.01" required class="field tnum pl-9 text-right">
+              </div>
+            </div>
+            <div>
+              <label for="totalTax" class="label">Total SST</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[11px] font-medium text-slate-500">RM</span>
+                <input type="number" id="totalTax" step="0.01" required class="field tnum pl-9 text-right">
+              </div>
+            </div>
+            <div>
+              <label for="totalPayable" class="label">Total payable</label>
+              <div class="relative">
+                <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[11px] font-medium text-brand-500">RM</span>
+                <input type="number" id="totalPayable" step="0.01" required class="field tnum border-brand-200 bg-brand-50/50 pl-9 text-right font-semibold text-brand-900">
+              </div>
+            </div>
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer Legal Name</label>
-          <input type="text" id="buyerName" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
+          <button type="submit" id="btnSubmit" class="btn btn-primary w-full py-3 text-sm">
+            <svg id="btnSpinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"></path>
+            </svg>
+            <span id="btnSubmitLabel">Run verification</span>
+          </button>
+          <p class="mt-2 text-center text-[11px] text-slate-500">Sends to the mock LHDN gateway and records the verdict in the audit ledger.</p>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer ID Type</label>
-            <select id="buyerIdType" class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
-              <option value="BRN">BRN (SSM 12-Digit Company)</option>
-              <option value="NRIC">NRIC (Individual 12-Digit)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Buyer ID Value</label>
-            <input type="text" id="buyerIdValue" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 font-mono">
-          </div>
-        </div>
-
-        <!-- Line Item -->
-        <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Item Line 1</span>
-          <div class="grid grid-cols-3 gap-2 mb-2">
-            <div class="col-span-2">
-              <input type="text" id="itemDesc" placeholder="Description" required class="w-full text-xs border border-slate-300 rounded p-2">
-            </div>
-            <div>
-              <input type="number" id="itemQty" step="1" min="1" placeholder="Qty" required class="w-full text-xs border border-slate-300 rounded p-2">
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div>
-              <input type="number" id="itemPrice" step="0.01" placeholder="Price (RM)" required class="w-full text-xs border border-slate-300 rounded p-2">
-            </div>
-            <div>
-              <input type="number" id="itemSst" step="0.01" placeholder="SST Rate (0.08)" required class="w-full text-xs border border-slate-300 rounded p-2">
-            </div>
-            <div>
-              <input type="number" id="itemLineTotal" step="0.01" placeholder="Line Total (RM)" required class="w-full text-xs border border-slate-300 rounded p-2 font-mono">
-            </div>
-          </div>
-        </div>
-
-        <!-- Header Totals -->
-        <div class="grid grid-cols-3 gap-3 pt-2">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Subtotal (RM)</label>
-            <input type="number" id="subtotal" step="0.01" required class="w-full text-sm border border-slate-300 rounded-lg p-2 font-mono">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Total SST (RM)</label>
-            <input type="number" id="totalTax" step="0.01" required class="w-full text-sm border border-slate-300 rounded-lg p-2 font-mono">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Total Payable (RM)</label>
-            <input type="number" id="totalPayable" step="0.01" required class="w-full text-sm border border-slate-300 rounded-lg p-2 font-mono font-bold text-blue-900">
-          </div>
-        </div>
-
-        <button type="submit" id="btnSubmit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg shadow transition flex justify-center items-center gap-2">
-          <span>Run Verification &amp; Dispatch</span>
-        </button>
       </form>
     </section>
 
-    <!-- Right Column: Verification Result Panel (5 cols) -->
-    <section class="lg:col-span-5 space-y-6">
+    <!-- Result + controls -->
+    <section class="space-y-5 lg:col-span-5">
 
-      <!-- Result Card -->
-      <div id="resultCard" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 min-h-[300px] flex flex-col justify-center items-center text-center">
-        <div class="text-slate-400">
-          <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-          <p class="text-sm font-medium">No invoice verified yet.</p>
-          <p class="text-xs text-slate-400 mt-1">Submit an invoice on the left or load a sample.</p>
-        </div>
+      <div id="resultCard" aria-live="polite" class="card flex min-h-[190px] flex-col items-center justify-center p-6 text-center lg:min-h-[320px]">
+        <span class="grid h-12 w-12 place-items-center rounded-full border border-dashed border-slate-300 text-slate-500">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z"/></svg>
+        </span>
+        <p class="mt-3 text-sm font-medium text-slate-700">Awaiting verification</p>
+        <p class="mt-1 max-w-[230px] text-xs leading-relaxed text-slate-500">Submit an invoice, or load a sample to see a certified and an intercepted verdict.</p>
       </div>
 
-      <!-- Quick Metrics -->
-      <div class="bg-slate-900 text-white rounded-xl p-5 shadow-sm">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Gateway Guard Telemetry</h3>
-          <span id="gatewayStatus" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">&#9679; Connecting</span>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <span class="text-2xl font-bold text-emerald-400" id="metricPassed">0</span>
-            <p class="text-xs text-slate-400 mt-0.5">Certified by LHDN</p>
-          </div>
-          <div>
-            <span class="text-2xl font-bold text-rose-400" id="metricRejected">0</span>
-            <p class="text-xs text-slate-400 mt-0.5">Internally Intercepted</p>
-          </div>
-        </div>
+      <div class="card p-5">
+        <h3 class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Controls enforced</h3>
+        <ul class="mt-4 space-y-3.5">
+          <li class="flex gap-3">
+            <span class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600"><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg></span>
+            <div>
+              <p class="text-xs font-medium text-slate-800">Statutory TIN syntax</p>
+              <p class="mt-0.5 text-[11px] text-slate-500">Company, individual and government prefixes.</p>
+            </div>
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600"><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg></span>
+            <div>
+              <p class="text-xs font-medium text-slate-800">12-digit BRN / NRIC identity</p>
+              <p class="mt-0.5 text-[11px] text-slate-500">Registration numbers must be exactly 12 digits.</p>
+            </div>
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600"><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg></span>
+            <div>
+              <p class="text-xs font-medium text-slate-800">SST schedule 0 / 6 / 8%</p>
+              <p class="mt-0.5 text-[11px] text-slate-500">Only the three statutory rates are accepted.</p>
+            </div>
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600"><svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg></span>
+            <div>
+              <p class="text-xs font-medium text-slate-800">Sen-level arithmetic</p>
+              <p class="mt-0.5 text-[11px] text-slate-500">Every line and total is recomputed to half-up.</p>
+            </div>
+          </li>
+        </ul>
       </div>
 
     </section>
 
-    <!-- Batch Sanitizer: Full Width -->
-    <section class="lg:col-span-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div class="flex justify-between items-start mb-4">
+    <!-- Batch sanitizer -->
+    <section class="card p-6 lg:col-span-12">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 class="text-lg font-semibold text-slate-900">Batch sanitizer</h2>
-          <p class="text-xs text-slate-500">Drop a billing CSV to scan every row before gateway submission</p>
+          <h2 class="text-base font-semibold tracking-tight text-slate-900">Business batch sanitizer</h2>
+          <p class="mt-0.5 text-xs text-slate-500">Scan a billing CSV row by row before gateway submission.</p>
         </div>
-        <a href="/sample-billing-batch.csv" download class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition">
-          Download sample CSV
+        <a href="/sample-billing-batch.csv" download class="btn btn-soft">
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M12 3v12.75m0 0 4.5-4.5m-4.5 4.5-4.5-4.5"/></svg>
+          Download sample
         </a>
       </div>
 
-      <div id="dropZone" class="border-2 border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/40 rounded-xl p-8 text-center cursor-pointer transition">
-        <svg class="w-10 h-10 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"></path></svg>
-        <p class="text-sm font-medium text-slate-700">Drag &amp; drop your <span class="font-mono">.csv</span> batch file here</p>
-        <p class="text-xs text-slate-400 mt-1">or click to browse &bull; maximum 5 MB</p>
+      <div id="dropZone" role="button" tabindex="0" class="group mt-4 cursor-pointer rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/60 px-6 py-10 text-center transition hover:border-brand-400 hover:bg-brand-50/40 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20">
+        <span class="mx-auto grid h-11 w-11 place-items-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition group-hover:text-brand-600 group-hover:ring-brand-200">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 0L7.5 9m4.5-4.5L16.5 9M4.5 16.5v1.875A1.875 1.875 0 0 0 6.375 20.25h11.25a1.875 1.875 0 0 0 1.875-1.875V16.5"/></svg>
+        </span>
+        <p class="mt-3 text-sm font-medium text-slate-700">Drop a CSV batch here, or <span class="text-brand-600 underline decoration-brand-300 underline-offset-2">browse files</span></p>
+        <p class="mt-1 font-mono text-[10px] text-slate-500">UTF-8 &#183; header row required &#183; max 5 MB</p>
         <input type="file" id="csvInput" accept=".csv" class="hidden">
       </div>
 
-      <div id="batchStatus" class="hidden mt-4 text-sm rounded-lg p-3"></div>
+      <div id="batchStatus" role="status" class="mt-4 hidden rounded-lg p-3 text-sm"></div>
+      <div id="batchSummary" class="mt-4 hidden grid-cols-3 gap-4"></div>
 
-      <div id="batchSummary" class="hidden mt-4"></div>
-
-      <div id="batchResults" class="hidden mt-4 overflow-x-auto">
+      <div id="batchResults" class="mt-4 hidden max-h-[420px] overflow-auto rounded-lg border border-slate-200">
         <table class="w-full text-left text-xs">
-          <thead class="bg-slate-50 text-slate-600 uppercase font-mono border-b border-slate-200">
+          <thead class="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 font-mono uppercase text-slate-600">
             <tr>
-              <th class="py-3 px-3">Row</th>
-              <th class="py-3 px-3">Invoice #</th>
-              <th class="py-3 px-3">Status</th>
-              <th class="py-3 px-3">LHDN UUID / Defect Manifest</th>
+              <th class="whitespace-nowrap px-3 py-3">Row</th>
+              <th class="whitespace-nowrap px-3 py-3">Invoice #</th>
+              <th class="whitespace-nowrap px-3 py-3">Status</th>
+              <th class="px-3 py-3">LHDN UUID / defect manifest</th>
             </tr>
           </thead>
           <tbody id="batchTableBody" class="divide-y divide-slate-100"></tbody>
@@ -221,45 +366,59 @@
       </div>
     </section>
 
-    <!-- Bottom Full Width: Real-Time Audit Trail -->
-    <section class="lg:col-span-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div class="flex justify-between items-center mb-4">
+    <!-- Audit trail -->
+    <section class="card p-6 lg:col-span-12">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 class="text-lg font-semibold text-slate-900">Audit History &amp; LHDN Certificates</h2>
-          <p class="text-xs text-slate-500">Persisted records retrieved from H2 enterprise repository</p>
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-semibold tracking-tight text-slate-900">Audit history</h2>
+            <span id="historyCount" class="badge bg-slate-100 text-slate-500">0 records</span>
+          </div>
+          <p class="mt-0.5 text-xs text-slate-500">Persisted verdicts from the H2 audit repository.</p>
         </div>
         <div class="flex items-center gap-2">
-          <select id="historyFilter" onchange="fetchHistory()" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5">
-            <option value="">All verdicts</option>
-            <option value="CERTIFIED_LHDN">Certified only</option>
-            <option value="REJECTED_INTERNAL">Rejected only</option>
-          </select>
-          <button onclick="refreshAll()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1">
-            <span>&circlearrowright; Refresh</span>
+          <div class="relative">
+            <select id="historyFilter" onchange="fetchHistory()" aria-label="Filter audit history by verdict" class="appearance-none rounded-lg border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-xs font-medium text-slate-700 shadow-sm transition focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10">
+              <option value="">All verdicts</option>
+              <option value="CERTIFIED_LHDN">Certified only</option>
+              <option value="REJECTED_INTERNAL">Rejected only</option>
+            </select>
+            <svg class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+          </div>
+          <button onclick="refreshAll()" class="btn btn-soft" title="Reload metrics and audit history">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356m-3.182 11.29a8.25 8.25 0 1 1-1.81-8.93l4.992 4.99"/></svg>
+            Refresh
           </button>
         </div>
       </div>
 
-      <div class="overflow-x-auto">
+      <div class="mt-4 max-h-[520px] overflow-auto rounded-lg border border-slate-200">
         <table class="w-full min-w-[900px] text-left text-xs">
-          <thead class="bg-slate-50 text-slate-600 uppercase font-mono border-b border-slate-200">
+          <thead class="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 font-mono uppercase text-slate-600">
             <tr>
-              <th class="py-3 px-3 whitespace-nowrap">Invoice #</th>
-              <th class="py-3 px-3 whitespace-nowrap">Buyer Name</th>
-              <th class="py-3 px-3 whitespace-nowrap">Total (RM)</th>
-              <th class="py-3 px-3 whitespace-nowrap">Status</th>
-              <th class="py-3 px-3 whitespace-nowrap">LHDN UUID / Error Details</th>
-              <th class="py-3 px-3 whitespace-nowrap">Last Verified</th>
+              <th class="whitespace-nowrap px-3 py-3">Invoice #</th>
+              <th class="whitespace-nowrap px-3 py-3">Buyer name</th>
+              <th class="whitespace-nowrap px-3 py-3 text-right">Total (RM)</th>
+              <th class="whitespace-nowrap px-3 py-3">Status</th>
+              <th class="whitespace-nowrap px-3 py-3">LHDN UUID / error details</th>
+              <th class="whitespace-nowrap px-3 py-3">Last verified</th>
             </tr>
           </thead>
           <tbody id="historyTable" class="divide-y divide-slate-100">
-            <tr><td colspan="6" class="text-center py-4 text-slate-400">Loading audit records...</td></tr>
+            <tr><td colspan="6" class="py-10 text-center text-slate-500">Loading audit records&#8230;</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
   </main>
+
+  <footer class="mx-auto max-w-6xl px-6 pb-10">
+    <div class="flex flex-col items-center justify-between gap-2 border-t border-slate-200 pt-5 text-[11px] text-slate-500 sm:flex-row">
+      <p>e-Invoice pre-flight verifier &#183; mock LHDN gateway</p>
+      <p class="font-mono">POST /verify &#183; POST /upload-batch &#183; GET /history &#183; GET /metrics</p>
+    </div>
+  </footer>
 
   <script>
     // ---------------------------------------------------------------- helpers
@@ -277,6 +436,25 @@
     function money(value) {
       const n = parseFloat(value);
       return isNaN(n) ? '-' : n.toFixed(2);
+    }
+
+    function safeUrl(value) {
+      const s = String(value || '');
+      return /^https?:\/\//i.test(s) ? s : '';
+    }
+
+    function statusLabel(status) {
+      if (status === 'CERTIFIED_LHDN') return 'Certified';
+      if (status === 'REJECTED_INTERNAL') return 'Rejected';
+      return status || 'Unknown';
+    }
+
+    function formatDate(isoDateString) {
+      if (!isoDateString) return '-';
+      return new Date(isoDateString).toLocaleString('en-MY', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+      });
     }
 
     // ------------------------------------------------------- single invoice
@@ -316,6 +494,8 @@
     async function submitInvoice(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
+      const label = document.getElementById('btnSubmitLabel');
+      const spinner = document.getElementById('btnSpinner');
       const payload = {
         invoiceNumber: document.getElementById('invoiceNumber').value,
         buyerName: document.getElementById('buyerName').value,
@@ -335,6 +515,9 @@
       };
 
       btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      label.textContent = 'Verifying\u2026';
+      spinner.classList.remove('hidden');
       try {
         const res = await fetch('/api/einvoice/verify', {
           method: 'POST',
@@ -349,6 +532,9 @@
           errors: ['Transport failure: ' + err.message] });
       } finally {
         btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        label.textContent = 'Run verification';
+        spinner.classList.add('hidden');
       }
     }
 
@@ -356,50 +542,91 @@
       const card = document.getElementById('resultCard');
       const status = data.status || 'REJECTED_INTERNAL';
       const errors = Array.isArray(data.errors) ? data.errors : [];
+      const invoice = escapeHtml(data.invoiceNumber);
 
       if (status.startsWith('CERTIFIED_LHDN')) {
-        card.className = 'bg-emerald-50 rounded-xl shadow-sm border border-emerald-200 p-6 text-left';
+        const uuid = escapeHtml(data.lhdnUuid);
+        const qr = safeUrl(data.qrCodeUrl);
+
+        card.className = 'card border-emerald-200 bg-emerald-50/60 p-6 text-left';
         card.innerHTML = `
-          <div class="flex items-center gap-2 text-emerald-800 font-bold mb-2">
-            <span class="text-xl">&check;</span>
-            <span>VERIFIED &amp; CERTIFIED BY LHDN</span>
+          <div class="flex items-start gap-3">
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-emerald-900">Certified by LHDN</p>
+              <p class="mt-0.5 truncate font-mono text-[11px] text-emerald-700">${invoice}</p>
+            </div>
           </div>
-          <p class="text-xs text-emerald-700 font-mono mb-3">Invoice: ${escapeHtml(data.invoiceNumber)}</p>
-          <div class="bg-white p-3 rounded-lg border border-emerald-200 text-xs font-mono space-y-1">
-            <p class="text-slate-500 font-sans">Official LHDN Clearance Identifier:</p>
-            <p class="text-emerald-900 font-bold break-all">${escapeHtml(data.lhdnUuid)}</p>
+          <div class="mt-4 rounded-lg border border-emerald-200 bg-white p-3">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Clearance identifier</p>
+            <div class="mt-1 flex items-start justify-between gap-3">
+              <p class="break-all font-mono text-xs font-medium leading-relaxed text-emerald-900">${uuid}</p>
+              <button type="button" data-copy="${uuid}" class="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50">Copy</button>
+            </div>
           </div>
-          <div class="bg-white p-3 rounded-lg border border-emerald-200 text-xs font-mono mt-2">
-            <p class="text-slate-500 font-sans">QR Validation URL:</p>
-            <p class="text-emerald-900 break-all">${escapeHtml(data.qrCodeUrl)}</p>
-          </div>
+          ${qr ? `
+          <a href="${escapeHtml(data.qrCodeUrl)}" target="_blank" rel="noopener noreferrer" class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-white p-3 transition hover:bg-emerald-50">
+            <span class="min-w-0">
+              <span class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">Validation URL</span>
+              <span class="mt-0.5 block truncate font-mono text-[11px] text-emerald-800">${escapeHtml(data.qrCodeUrl)}</span>
+            </span>
+            <svg class="h-4 w-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M6 6.75v10.5A.75.75 0 0 0 6.75 18h10.5"/></svg>
+          </a>` : ''}
         `;
       } else {
         const count = errors.length;
-        card.className = 'bg-rose-50 rounded-xl shadow-sm border border-rose-200 p-6 text-left';
+        card.className = 'card border-rose-200 bg-rose-50/60 p-6 text-left';
         card.innerHTML = `
-          <div class="flex items-center gap-2 text-rose-800 font-bold mb-2">
-            <span class="text-xl">&cross;</span>
-            <span>PRE-SUBMISSION REJECTION (${count} Error${count === 1 ? '' : 's'})</span>
+          <div class="flex items-start gap-3">
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rose-100 text-rose-700">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-rose-900">Rejected before submission</p>
+              <p class="mt-0.5 truncate font-mono text-[11px] text-rose-700">${invoice}</p>
+            </div>
+            <span class="badge ml-auto shrink-0 bg-rose-100 text-rose-700">${count} ${count === 1 ? 'error' : 'errors'}</span>
           </div>
-          <p class="text-xs text-rose-700 font-mono mb-3">Invoice: ${escapeHtml(data.invoiceNumber)}</p>
-          <div class="space-y-1.5">
-            ${errors.map(err => `
-              <div class="bg-white p-2.5 rounded border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
-                <span class="text-rose-500 font-bold mt-0.5">&bull;</span>
-                <span>${escapeHtml(err)}</span>
-              </div>
+          <ul class="mt-4 space-y-2">
+            ${errors.map((err, i) => `
+              <li class="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-white p-2.5 text-xs text-rose-900">
+                <span class="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-rose-100 font-mono text-[9px] font-bold text-rose-600">${i + 1}</span>
+                <span class="leading-relaxed">${escapeHtml(err)}</span>
+              </li>
             `).join('')}
-          </div>
+          </ul>
         `;
       }
     }
+
+    // Copy buttons inside the result card (event delegation keeps the markup simple).
+    document.getElementById('resultCard').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-copy]');
+      if (!btn) return;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const original = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      } catch (err) {
+        console.error('Clipboard unavailable', err);
+      }
+    });
 
     // -------------------------------------------------------- batch sanitizer
     const dropZone = document.getElementById('dropZone');
     const csvInput = document.getElementById('csvInput');
 
     dropZone.addEventListener('click', () => csvInput.click());
+    dropZone.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        csvInput.click();
+      }
+    });
+
     csvInput.addEventListener('change', () => {
       if (csvInput.files.length) uploadBatchFile(csvInput.files[0]);
       csvInput.value = '';
@@ -407,12 +634,12 @@
 
     ['dragenter', 'dragover'].forEach(evt => dropZone.addEventListener(evt, e => {
       e.preventDefault();
-      dropZone.classList.add('border-blue-500', 'bg-blue-50/40');
+      dropZone.classList.add('is-dragging');
     }));
 
     ['dragleave', 'drop'].forEach(evt => dropZone.addEventListener(evt, e => {
       e.preventDefault();
-      dropZone.classList.remove('border-blue-500', 'bg-blue-50/40');
+      dropZone.classList.remove('is-dragging');
     }));
 
     dropZone.addEventListener('drop', e => {
@@ -423,10 +650,10 @@
     function setBatchStatus(message, tone) {
       const el = document.getElementById('batchStatus');
       const tones = {
-        info: 'bg-blue-50 text-blue-800 border border-blue-200',
-        error: 'bg-rose-50 text-rose-800 border border-rose-200'
+        info: 'bg-brand-50 text-brand-800 ring-1 ring-inset ring-brand-200',
+        error: 'bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200'
       };
-      el.className = 'mt-4 text-sm rounded-lg p-3 ' + (tones[tone] || tones.info);
+      el.className = 'mt-4 rounded-lg p-3 text-sm ' + (tones[tone] || tones.info);
       el.textContent = message;
     }
 
@@ -434,7 +661,7 @@
       if (!file) return;
       document.getElementById('batchSummary').classList.add('hidden');
       document.getElementById('batchResults').classList.add('hidden');
-      setBatchStatus('Scanning ' + file.name + ' through the pre-flight gatekeeper...', 'info');
+      setBatchStatus('Scanning ' + file.name + ' through the pre-flight gatekeeper\u2026', 'info');
 
       const form = new FormData();
       form.append('file', file);
@@ -458,25 +685,25 @@
       const rows = Array.isArray(data.rows) ? data.rows : [];
       setBatchStatus('Scanned ' + data.totalRows + ' row(s) from ' + data.fileName + '.', 'info');
 
-      document.getElementById('batchSummary').className = 'mt-4 grid grid-cols-3 gap-4';
+      document.getElementById('batchSummary').className = 'mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3';
       document.getElementById('batchSummary').innerHTML = `
-        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
-          <span class="text-2xl font-bold text-slate-800">${data.totalRows}</span>
-          <p class="text-xs text-slate-500 mt-0.5">Rows scanned</p>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
+          <span class="tnum text-2xl font-semibold text-slate-800">${data.totalRows}</span>
+          <p class="mt-0.5 text-[11px] font-medium text-slate-500">Rows scanned</p>
         </div>
-        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
-          <span class="text-2xl font-bold text-emerald-700">${data.certified}</span>
-          <p class="text-xs text-emerald-600 mt-0.5">Certified</p>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center">
+          <span class="tnum text-2xl font-semibold text-emerald-700">${data.certified}</span>
+          <p class="mt-0.5 text-[11px] font-medium text-emerald-600">Certified</p>
         </div>
-        <div class="bg-rose-50 border border-rose-200 rounded-lg p-4 text-center">
-          <span class="text-2xl font-bold text-rose-700">${data.rejected}</span>
-          <p class="text-xs text-rose-600 mt-0.5">Intercepted</p>
+        <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-center">
+          <span class="tnum text-2xl font-semibold text-rose-700">${data.rejected}</span>
+          <p class="mt-0.5 text-[11px] font-medium text-rose-600">Intercepted</p>
         </div>
       `;
 
       const tbody = document.getElementById('batchTableBody');
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400">The uploaded file contained no data rows.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="py-10 text-center text-slate-500">The uploaded file contained no data rows.</td></tr>';
         document.getElementById('batchResults').classList.remove('hidden');
         return;
       }
@@ -485,15 +712,16 @@
         const certified = r.status === 'CERTIFIED_LHDN';
         const detail = certified ? r.lhdnUuid : (Array.isArray(r.errors) ? r.errors.join(' | ') : '');
         return `
-          <tr class="hover:bg-slate-50">
-            <td class="py-2.5 px-3 font-mono text-slate-500">#${r.row}</td>
-            <td class="py-2.5 px-3 font-mono font-medium">${escapeHtml(r.invoiceNumber) || '-'}</td>
-            <td class="py-2.5 px-3">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${certified ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-                ${escapeHtml(r.status)}
+          <tr class="odd:bg-white even:bg-slate-50/60 hover:bg-brand-50/40">
+            <td class="whitespace-nowrap px-3 py-2.5 font-mono text-slate-500">#${r.row}</td>
+            <td class="whitespace-nowrap px-3 py-2.5 font-mono font-medium text-slate-800">${escapeHtml(r.invoiceNumber) || '-'}</td>
+            <td class="whitespace-nowrap px-3 py-2.5">
+              <span class="badge ${certified ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200'}" title="${escapeHtml(r.status)}">
+                <span class="h-1.5 w-1.5 rounded-full ${certified ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                ${escapeHtml(statusLabel(r.status))}
               </span>
             </td>
-            <td class="py-2.5 px-3 max-w-md font-mono text-[11px] text-slate-600 break-all">${escapeHtml(detail)}</td>
+            <td class="max-w-md break-all px-3 py-2.5 font-mono text-[11px] leading-relaxed text-slate-500">${escapeHtml(detail)}</td>
           </tr>
         `;
       }).join('');
@@ -515,31 +743,44 @@
       }
 
       const tbody = document.getElementById('historyTable');
+      const count = document.getElementById('historyCount');
       if (!Array.isArray(list) || list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400">No records found.</td></tr>';
+        count.textContent = '0 records';
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="py-12 text-center">
+              <span class="mx-auto grid h-10 w-10 place-items-center rounded-full bg-slate-50 text-slate-300 ring-1 ring-slate-200">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375"/></svg>
+              </span>
+              <p class="mt-2 text-xs font-medium text-slate-500">No verdicts match this filter</p>
+              <p class="mt-0.5 text-[11px] text-slate-500">Verify an invoice or upload a batch to populate the ledger.</p>
+            </td>
+          </tr>`;
         return;
       }
 
+      count.textContent = list.length + (list.length === 1 ? ' record' : ' records');
       tbody.innerHTML = list.map(r => {
         const isPassed = r.status === 'CERTIFIED_LHDN';
         const detail = isPassed ? r.lhdnUuid : r.errorManifest;
-        const attempts = r.attemptCount > 1 ? ' &bull; ' + r.attemptCount + ' attempts' : '';
+        const attempts = r.attemptCount > 1 ? ' \u00B7 ' + r.attemptCount + ' attempts' : '';
         const verifiedAt = r.lastVerifiedAt || r.createdAt;
         const verifiedLabel = formatDate(verifiedAt);
         return `
-          <tr class="hover:bg-slate-50">
-            <td class="py-2.5 px-3 font-mono font-medium whitespace-nowrap">${escapeHtml(r.invoiceNumber)}</td>
-            <td class="py-2.5 px-3 whitespace-nowrap">${escapeHtml(r.buyerName) || '-'}</td>
-            <td class="py-2.5 px-3 font-mono whitespace-nowrap">RM ${money(r.totalPayable)}</td>
-            <td class="py-2.5 px-3 whitespace-nowrap">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-                ${escapeHtml(r.status)}
+          <tr class="odd:bg-white even:bg-slate-50/60 hover:bg-brand-50/40">
+            <td class="whitespace-nowrap px-3 py-2.5 font-mono font-medium text-slate-800">${escapeHtml(r.invoiceNumber)}</td>
+            <td class="whitespace-nowrap px-3 py-2.5 text-slate-700">${escapeHtml(r.buyerName) || '-'}</td>
+            <td class="tnum whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-700">${money(r.totalPayable)}</td>
+            <td class="whitespace-nowrap px-3 py-2.5">
+              <span class="badge ${isPassed ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200'}" title="${escapeHtml(r.status)}">
+                <span class="h-1.5 w-1.5 rounded-full ${isPassed ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                ${escapeHtml(statusLabel(r.status))}
               </span>
             </td>
-            <td class="py-2.5 px-3 text-slate-600 font-mono text-[11px]">
+            <td class="px-3 py-2.5 font-mono text-[11px] text-slate-500">
               <div class="max-w-[280px] truncate" title="${escapeHtml(detail)}">${escapeHtml(detail)}</div>
             </td>
-            <td class="py-2.5 px-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">
+            <td class="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-slate-500">
               ${verifiedLabel}${attempts}
             </td>
           </tr>
@@ -550,9 +791,9 @@
     // ----------------------------------------------------------------- KPIs
     function setGatewayStatus(online) {
       const el = document.getElementById('gatewayStatus');
-      el.textContent = online ? '\u25CF LIVE' : '\u25CF OFFLINE';
-      el.className = 'text-[10px] font-bold uppercase tracking-wider ' +
-        (online ? 'text-emerald-400' : 'text-rose-400');
+      el.className = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ' +
+        (online ? 'bg-emerald-400/10 text-emerald-300 ring-emerald-400/30' : 'bg-rose-400/10 text-rose-300 ring-rose-400/30');
+      el.textContent = online ? '\u25CF Live' : '\u25CF Offline';
     }
 
     function applyMetrics(m) {
@@ -565,25 +806,22 @@
 
       document.getElementById('kpi-total').textContent = total.toLocaleString('en-MY');
       document.getElementById('kpi-gross').textContent =
-        'RM ' + gross.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        'RM ' + gross.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' total value';
       document.getElementById('kpi-clearance').textContent = rate.toFixed(1) + '%';
       document.getElementById('kpi-defects').textContent = rejected.toLocaleString('en-MY');
       document.getElementById('kpi-sendrift').textContent = drifts.toLocaleString('en-MY');
 
       const badge = document.getElementById('kpi-clearance-badge');
       if (total === 0) {
-        badge.textContent = 'Awaiting Volume';
-        badge.className = 'text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-medium whitespace-nowrap';
+        badge.textContent = 'Awaiting volume';
+        badge.className = 'badge bg-slate-100 text-slate-600';
       } else if (rate >= 90) {
-        badge.textContent = 'Gateway Ready';
-        badge.className = 'text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-medium whitespace-nowrap';
+        badge.textContent = 'Gateway ready';
+        badge.className = 'badge bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200';
       } else {
-        badge.textContent = 'Review Required';
-        badge.className = 'text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium whitespace-nowrap';
+        badge.textContent = 'Review required';
+        badge.className = 'badge bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200';
       }
-
-      document.getElementById('metricPassed').textContent = certified.toLocaleString('en-MY');
-      document.getElementById('metricRejected').textContent = rejected.toLocaleString('en-MY');
     }
 
     async function loadMetrics() {
@@ -596,14 +834,6 @@
         console.error('Failed to load metrics', err);
         setGatewayStatus(false);
       }
-    }
-
-    function formatDate(isoDateString) {
-      if (!isoDateString) return '-';
-      return new Date(isoDateString).toLocaleString('en-MY', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-      });
     }
 
     async function refreshAll() {
