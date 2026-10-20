@@ -14,12 +14,12 @@
 | Area | State |
 | :--- | :--- |
 | Build | `mvnw clean package` → BUILD SUCCESS |
-| Tests | **42 passing**, 0 failures |
+| Tests | **47 passing**, 0 failures |
 | Runtime | Starts on port 8080 in ~5 s |
 | API | 3 endpoints implemented and exercised over HTTP |
 | Dashboard | Embedded Tailwind SPA: single verify, drag-and-drop batch, audit history |
 | Docs | README + Swagger UI (`/swagger-ui.html`) + this log |
-| Git | 11 commits on `master`, pushed to `origin`, working tree clean |
+| Git | 16 commits on `master`, pushed to `origin`, working tree clean |
 
 ---
 
@@ -67,7 +67,12 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 | `6eba8b4` | 2026-10-20 11:36 | Accept statutory TIN prefixes in buyer validation | 4 files, +44/−10 |
 | `01adcd5` | 2026-10-20 11:41 | Make the audit table scroll cleanly and show full timestamps | 1 file, +21/−14 |
 | `5c23784` | 2026-10-20 11:50 | Update README and progress log for the amended behaviour | 2 files, +46/−30 |
-| *(this commit)* | 2026-10-20 11:58 | Align the timestamp format and nowrap coverage with the amendment | 5 files |
+| `d187a30` | 2026-10-20 11:58 | Align the timestamp format and nowrap coverage with the amendment | 5 files |
+| `9f7f6d4` | 2026-10-20 15:01 | Add the high-priority hardening specification | 1 file, +306 |
+| `e53c7cb` | 2026-10-20 15:01 | Add the executive KPI metrics endpoint | 6 files, +194 |
+| `ac517e4` | 2026-10-20 15:01 | Pin the H2 console path | 1 file, +1 |
+| `7482149` | 2026-10-20 15:01 | Add executive KPI cards to the dashboard | 1 file, +107/−18 |
+| *(this commit)* | 2026-10-20 15:05 | Document the metrics engine and KPI dashboard | 2 files |
 
 ---
 
@@ -78,8 +83,9 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 - `POST /api/einvoice/verify` — validates one payload and returns a verdict.
 - `POST /api/einvoice/upload-batch` — multipart CSV sanitisation with per-row verdicts and totals.
 - `GET /api/einvoice/history` — audit trail, newest first, optional `?status=` filter.
+- `GET /api/einvoice/metrics` — executive KPI aggregates over the ledger.
 - DTOs: `InvoiceRequest`, `LineItemRequest`, `VerificationResponse`, `BatchUploadResponse`,
-  `BatchRowResult`, `ApiError`.
+  `BatchRowResult`, `ApiError`, `InvoiceMetricsResponse`.
 - Arithmetic uses `BigDecimal` with `RoundingMode.HALF_UP` at sen (2 dp) precision:
 
   ```
@@ -144,16 +150,35 @@ Rules can be overridden at startup without a rebuild, e.g.:
 
 - Single-invoice form with one-click sample data.
 - Drag-and-drop / file-picker CSV upload with a per-row result table.
+- Executive KPI bar: Total Audited (+ gross value), Pre-Flight Clearance with a dynamic
+  Gateway Ready / Review Required badge, Defects Intercepted, and Sen-Drifts Caught.
+- Gateway Guard telemetry panel carries a live status dot driven by the metrics call.
 - Audit history table with status metrics, horizontal scrolling and non-wrapping headers on narrow
-  viewports, and a full `dd MMM yyyy, hh:mm` timestamp per row.
+  viewports, and a full `dd/MM/yyyy, hh:mm:ss` timestamp per row.
 - All server-provided values are HTML-escaped before rendering.
 
 ### 5.6 Documentation and tooling
 
 - `README.md`: setup, endpoints with `curl`, CSV schema, rules table, arithmetic model,
   architecture map, limitations.
-- Swagger UI with a titled OpenAPI document.
+- Swagger UI with a titled OpenAPI document and an operation summary per endpoint.
 - Sample batch at `src/main/resources/static/sample-billing-batch.csv` (2 clean, 2 defective rows).
+
+### 5.7 Executive metrics
+
+`GET /api/einvoice/metrics` returns one snapshot of the ledger:
+
+| Field | Meaning |
+| :--- | :--- |
+| `totalInvoices` | rows in the audit trail (one per unique invoice number) |
+| `certifiedCount` / `rejectedCount` | current verdict split |
+| `clearanceRatePercent` | certified ÷ total, `BigDecimal` at 1 dp, HALF_UP |
+| `senDriftDefectCount` | rejections whose manifest records an arithmetic mismatch |
+| `totalGrossAudited` | sum of stored total payable, 2 dp |
+
+Aggregation happens in the database (`COUNT`, `COUNT ... LIKE`, `SUM`) rather than by loading the
+ledger into memory. `SUM` returns `null` on an empty table, which the service normalises to `0.00`;
+a JPQL `COALESCE(..., 0)` would mix an integer literal into a `BigDecimal` expression.
 
 ---
 
@@ -174,16 +199,18 @@ Rules can be overridden at startup without a rebuild, e.g.:
 | 11 | Audit records vanished on restart | Database was in-memory | File-backed H2 at `./data/einvoicedb`; tests use an in-memory profile |
 | 12 | History table squeezed columns and hid "Last Verified" on narrow panes | Table could not scroll and only rendered a time | `overflow-x-auto` + `min-w-[900px]` + non-wrapping headers, and a full localised timestamp |
 | 13 | Local database files and IDE settings could be committed | No root `.gitignore`; `.vscode/` was tracked | Root `.gitignore` for `data/`, `*.mv.db`, `*.trace.db`, `.vscode/`, `.idea/`, `*.iml` |
+| 14 | The sen-drift KPI would always report zero | The specified `LIKE '%drift%'/'%arithmetic%'` never matches a real manifest, which says "Mismatch" | Query matches the actual `Mismatch` markers; a test proves format-only rejections are not counted |
+| 15 | Footer counts disagreed with the KPI cards when a status filter was active | Counts were derived from the visible rows | All figures now come from the server-side aggregate, independent of the history filter |
 
 ---
 
-## 7. Test coverage — 42 tests
+## 7. Test coverage — 47 tests
 
 | Suite | Tests | Covers |
 | :--- | ---: | :--- |
-| `InvoiceVerificationServiceTest` | 19 | Rounding (HALF_UP), 10-digit BRN, TIN formats and prefixes, SST schedule, multi-item totals, null safety, empty items, blank invoice number, audit refresh on resubmission, configurable TIN/SST rules |
+| `InvoiceVerificationServiceTest` | 22 | Rounding (HALF_UP), 10-digit BRN, TIN formats and prefixes, SST schedule, multi-item totals, null safety, empty items, blank invoice number, audit refresh on resubmission, configurable TIN/SST rules, metrics aggregation and rate rounding |
 | `InvoiceBatchSanitizerTest` | 8 | Row parsing, quoted fields, non-numeric cells, missing columns, mixed batch split, malformed-row persistence, missing invoice number, row limit |
-| `InvoiceControllerTest` | 14 | `/verify` certified/rejected, malformed and empty JSON, wrong field types, batch split, non-CSV/empty/missing file, bad header, history ordering/filtering, **per-row isolation** |
+| `InvoiceControllerTest` | 16 | `/verify` certified/rejected, malformed and empty JSON, wrong field types, batch split, non-CSV/empty/missing file, bad header, history ordering/filtering, **per-row isolation**, empty and populated `/metrics` |
 | `EinvoiceVerifierApplicationTests` | 1 | Context loads (binds `EinvoiceProperties`) |
 
 Run with:
@@ -211,6 +238,10 @@ All of the following were exercised against the running app, not just unit-teste
 | Unauthorised TIN prefix (`X2938475610`) | Rejected with the TIN format rule |
 | Audit record across a full restart | `PERSIST-001` still returned by `/history` after stopping and restarting the service |
 | Narrow viewport (804 px) history table | Container scrolls (`scrollWidth 933 > clientWidth 691`); every data cell is `nowrap`; "Last Verified" shows `20/10/2026, 11:56:00 am` |
+| `GET /metrics` on an empty ledger | `0 / 0 / 0 / 0.0 / 0 / 0.00` |
+| Three submissions (1 certified, 1 arithmetic rejection, 1 format-only rejection) | `totalInvoices 3`, `certified 1`, `rejected 2`, `clearanceRatePercent 33.3`, `senDriftDefectCount 1`, `totalGrossAudited 3240.99` |
+| Dashboard after a form submission | KPI cards and telemetry refreshed to `4 audited / 50.0% / RM 4,320.99`, gateway status `● LIVE` |
+| KPI bar layout at 1000 px | Four equal 222 px cards on one row, 16 px gaps, no page overflow |
 | SST `0.10` | Rejected as an unapproved rate |
 | SST `0.06` | Certified |
 | Startup override (`allowed-sst-rates=0.05`) | 8% rejected, 5% certified — proves rules bind from properties |
@@ -228,6 +259,8 @@ All of the following were exercised against the running app, not just unit-teste
 | Validation invoked manually, not via `@Valid` on the controller | Keeps the single-submit and batch paths identical and the response shape uniform |
 | Problem-details advice disabled | Boot's own advice outranked the custom handler and changed the error shape |
 | File-backed H2 | Keeps the zero-dependency deployment while making the audit trail survive restarts |
+| Sen drift is detected from the stored manifest text | The audit row already records the defect class, so the KPI needs no extra column; the marker is the literal "Mismatch" the service writes |
+| KPIs aggregate in SQL, not in the browser | The history endpoint is filterable and paginated later; deriving counts from visible rows would make the headline numbers drift |
 
 ---
 

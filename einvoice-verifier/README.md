@@ -57,6 +57,7 @@ it is gitignored, so local audit data never reaches the repository.
 | `POST` | `/api/einvoice/verify` | Validate a single invoice payload and issue a mock LHDN certificate |
 | `POST` | `/api/einvoice/upload-batch` | Sanitise a CSV billing file (`multipart/form-data`) |
 | `GET` | `/api/einvoice/history` | Audit trail, newest first; optional `?status=` filter |
+| `GET` | `/api/einvoice/metrics` | Executive KPI aggregates computed over the audit ledger |
 
 ### Verify a single invoice
 
@@ -121,6 +122,29 @@ Returns per-row verdicts plus totals:
 curl -s http://localhost:8080/api/einvoice/history
 curl -s 'http://localhost:8080/api/einvoice/history?status=REJECTED_INTERNAL'
 ```
+
+### Executive metrics
+
+```bash
+curl -s http://localhost:8080/api/einvoice/metrics
+```
+
+```json
+{
+  "totalInvoices": 128,
+  "certifiedCount": 119,
+  "rejectedCount": 9,
+  "clearanceRatePercent": 93.0,
+  "senDriftDefectCount": 4,
+  "totalGrossAudited": 184920.50
+}
+```
+
+The figures describe the current ledger, not individual HTTP calls: an invoice that is resubmitted is
+still one row. `clearanceRatePercent` is `certified / total` rounded half-up to one decimal place,
+`senDriftDefectCount` counts stored rejections whose manifest records an arithmetic mismatch, and
+`totalGrossAudited` sums every stored total payable at sen precision. These are the values behind the
+dashboard's KPI cards.
 
 ---
 
@@ -210,6 +234,7 @@ dto/
   BatchUploadResponse.java      Batch totals + per-row verdicts
   BatchRowResult.java           One CSV row's verdict
   ApiError.java                 Non-verdict failures (e.g. bad upload)
+  InvoiceMetricsResponse.java   Executive KPI snapshot
 entity/
   InvoiceAuditRecord.java       Persisted audit row
 repository/
@@ -246,11 +271,11 @@ cd einvoice-verifier
 ./mvnw test
 ```
 
-42 tests cover sen-level rounding, identity and TIN rules (including every statutory prefix),
+47 tests cover sen-level rounding, identity and TIN rules (including every statutory prefix),
 the SST schedule, configuration
 overrides, null-safety, audit-trail refresh on resubmission, CSV parsing edge cases, batch
-aggregation, per-row transaction isolation, and the HTTP contract itself (status codes, malformed
-JSON, multipart handling and history filtering).
+aggregation, per-row transaction isolation, the KPI aggregation endpoint, and the HTTP contract
+itself (status codes, malformed JSON, multipart handling and history filtering).
 
 ---
 
