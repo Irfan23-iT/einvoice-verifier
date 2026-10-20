@@ -14,12 +14,12 @@
 | Area | State |
 | :--- | :--- |
 | Build | `mvnw clean package` → BUILD SUCCESS |
-| Tests | **41 passing**, 0 failures |
+| Tests | **42 passing**, 0 failures |
 | Runtime | Starts on port 8080 in ~5 s |
 | API | 3 endpoints implemented and exercised over HTTP |
 | Dashboard | Embedded Tailwind SPA: single verify, drag-and-drop batch, audit history |
 | Docs | README + Swagger UI (`/swagger-ui.html`) + this log |
-| Git | 10 commits on `master`, pushed to `origin`, working tree clean |
+| Git | 11 commits on `master`, pushed to `origin`, working tree clean |
 
 ---
 
@@ -66,7 +66,8 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 | `dd2346a` | 2026-10-20 11:35 | Persist the audit trail in file-backed H2 | 4 files, +8/−2 |
 | `6eba8b4` | 2026-10-20 11:36 | Accept statutory TIN prefixes in buyer validation | 4 files, +44/−10 |
 | `01adcd5` | 2026-10-20 11:41 | Make the audit table scroll cleanly and show full timestamps | 1 file, +21/−14 |
-| *(this commit)* | 2026-10-20 11:50 | Update README and progress log for the amended behaviour | 2 files, +46/−30 |
+| `5c23784` | 2026-10-20 11:50 | Update README and progress log for the amended behaviour | 2 files, +46/−30 |
+| *(this commit)* | 2026-10-20 11:58 | Align the timestamp format and nowrap coverage with the amendment | 5 files |
 
 ---
 
@@ -176,11 +177,11 @@ Rules can be overridden at startup without a rebuild, e.g.:
 
 ---
 
-## 7. Test coverage — 41 tests
+## 7. Test coverage — 42 tests
 
 | Suite | Tests | Covers |
 | :--- | ---: | :--- |
-| `InvoiceVerificationServiceTest` | 18 | Rounding (HALF_UP), 10-digit BRN, TIN formats and prefixes, SST schedule, multi-item totals, null safety, empty items, blank invoice number, audit refresh on resubmission, configurable TIN/SST rules |
+| `InvoiceVerificationServiceTest` | 19 | Rounding (HALF_UP), 10-digit BRN, TIN formats and prefixes, SST schedule, multi-item totals, null safety, empty items, blank invoice number, audit refresh on resubmission, configurable TIN/SST rules |
 | `InvoiceBatchSanitizerTest` | 8 | Row parsing, quoted fields, non-numeric cells, missing columns, mixed batch split, malformed-row persistence, missing invoice number, row limit |
 | `InvoiceControllerTest` | 14 | `/verify` certified/rejected, malformed and empty JSON, wrong field types, batch split, non-CSV/empty/missing file, bad header, history ordering/filtering, **per-row isolation** |
 | `EinvoiceVerifierApplicationTests` | 1 | Context loads (binds `EinvoiceProperties`) |
@@ -209,7 +210,7 @@ All of the following were exercised against the running app, not just unit-teste
 | 11-character TIN (`C2938475610`) | Certified once the statutory prefixes were allowed |
 | Unauthorised TIN prefix (`X2938475610`) | Rejected with the TIN format rule |
 | Audit record across a full restart | `PERSIST-001` still returned by `/history` after stopping and restarting the service |
-| Narrow viewport (804 px) history table | Container scrolls (`scrollWidth 965 > clientWidth 691`); "Last Verified" shows `20 Oct 2026, 11:37 am • 2 attempts` |
+| Narrow viewport (804 px) history table | Container scrolls (`scrollWidth 933 > clientWidth 691`); every data cell is `nowrap`; "Last Verified" shows `20/10/2026, 11:56:00 am` |
 | SST `0.10` | Rejected as an unapproved rate |
 | SST `0.06` | Certified |
 | Startup override (`allowed-sst-rates=0.05`) | 8% rejected, 5% certified — proves rules bind from properties |

@@ -246,7 +246,7 @@ cd einvoice-verifier
 ./mvnw test
 ```
 
-41 tests cover sen-level rounding, identity and TIN rules (including every statutory prefix),
+42 tests cover sen-level rounding, identity and TIN rules (including every statutory prefix),
 the SST schedule, configuration
 overrides, null-safety, audit-trail refresh on resubmission, CSV parsing edge cases, batch
 aggregation, per-row transaction isolation, and the HTTP contract itself (status codes, malformed

@@ -115,17 +115,27 @@ class InvoiceVerificationServiceTest {
     }
 
     @Test
-    @DisplayName("Statutory TIN prefixes and bare 12-digit TINs are certified")
-    void acceptedTinFormatsAreCertified() {
-        List<String> accepted = List.of(
+    @DisplayName("A business TIN with a statutory prefix is certified")
+    void verify_validBusinessTinWithPrefix_certified() {
+        List<String> prefixed = List.of(
             "C1029384750", "IG1029384750", "SG1029384750", "OG1029384750",
-            "D1029384750", "PT1029384750", "CS1029384750", "102938475000");
+            "D1029384750", "PT1029384750", "CS1029384750");
 
-        for (String tin : accepted) {
+        for (String tin : prefixed) {
             VerificationResponse response = service.verifyAndProcess(withTin(validInvoice(), tin));
 
             assertThat(response.status()).as("TIN %s should be certified", tin).isEqualTo("CERTIFIED_LHDN");
         }
+    }
+
+    @Test
+    @DisplayName("A bare 12-digit numeric TIN is certified")
+    void verify_validNumericTin_certified() {
+        VerificationResponse response = service.verifyAndProcess(withTin(validInvoice(), "102938475000"));
+
+        assertThat(response.status()).isEqualTo("CERTIFIED_LHDN");
+        assertThat(response.errorCount()).isZero();
+        assertThat(response.errors()).isEmpty();
     }
 
     @Test
