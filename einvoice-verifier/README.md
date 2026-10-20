@@ -213,7 +213,8 @@ entity/
 repository/
   InvoiceAuditRepository.java   JPA repository
 service/
-  InvoiceVerificationService.java   Rule evaluation, arithmetic, batch orchestration
+  InvoiceVerificationService.java   Rule evaluation, arithmetic, single-invoice persistence
+  InvoiceBatchSanitizer.java        Batch orchestration; one transaction per row
   CsvInvoiceBatchParser.java        Tolerant CSV -> InvoiceRequest mapping
 ```
 
@@ -229,6 +230,11 @@ The audit trail is upserted on `invoiceNumber`. A repeat submission refreshes ev
 (including the defect manifest) and increments `attemptCount`, so a stored record always describes
 the latest attempt rather than a mixture of old and new values.
 
+Batch processing is deliberately not one large transaction. Each row runs in its own
+`REQUIRES_NEW` transaction, so an unexpected failure rolls back only that row and is reported in
+place as a `REJECTED_INTERNAL` row result. Rows committed before it survive, and the remaining rows
+are still sanitized — a single corrupt row cannot cost the operator the rest of the file.
+
 ---
 
 ## Tests
@@ -238,10 +244,10 @@ cd einvoice-verifier
 ./mvnw test
 ```
 
-38 tests cover sen-level rounding, identity and TIN rules, the SST schedule, configuration
+39 tests cover sen-level rounding, identity and TIN rules, the SST schedule, configuration
 overrides, null-safety, audit-trail refresh on resubmission, CSV parsing edge cases, batch
-aggregation, and the HTTP contract itself (status codes, malformed JSON, multipart handling and
-history filtering).
+aggregation, per-row transaction isolation, and the HTTP contract itself (status codes, malformed
+JSON, multipart handling and history filtering).
 
 ---
 

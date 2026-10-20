@@ -218,6 +218,30 @@ class InvoiceControllerTest {
         assertThat(body(result)).contains("missing required column");
     }
 
+    @Test
+    @DisplayName("An unexpected row failure rolls back only that row; earlier rows stay committed")
+    void batchRowFailureIsIsolated() throws Exception {
+        // Overruns the audit column's length, so persistence fails at commit time for this row only.
+        String oversizedInvoiceNumber = "X".repeat(300);
+
+        mockMvc.perform(multipart("/api/einvoice/upload-batch").file(csv(
+                CLEAN_CSV_ROW,
+                oversizedInvoiceNumber
+                    + ",Broken Sdn Bhd,BRN,202401001111,102938475010,Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalRows").value(2))
+            .andExpect(jsonPath("$.certified").value(1))
+            .andExpect(jsonPath("$.rejected").value(1))
+            .andExpect(jsonPath("$.rows[0].status").value("CERTIFIED_LHDN"))
+            .andExpect(jsonPath("$.rows[1].status").value("REJECTED_INTERNAL"))
+            .andExpect(jsonPath("$.rows[1].errors[0]").value("System error while processing this row; the row was not persisted."));
+
+        // The clean row was committed in its own transaction and survives the later failure.
+        assertThat(repository.findAll())
+            .extracting(InvoiceAuditRecord::getInvoiceNumber)
+            .containsExactly("WEB-B-001");
+    }
+
     // -------------------------------------------------------- GET /history
 
     @Test

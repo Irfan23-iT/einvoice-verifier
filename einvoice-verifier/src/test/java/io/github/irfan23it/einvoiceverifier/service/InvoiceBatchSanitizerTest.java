@@ -35,7 +35,7 @@ class InvoiceBatchSanitizerTest {
     private final CsvInvoiceBatchParser parser = new CsvInvoiceBatchParser();
     private final Map<String, InvoiceAuditRecord> store = new HashMap<>();
     private InvoiceAuditRepository repository;
-    private InvoiceVerificationService service;
+    private InvoiceBatchSanitizer sanitizer;
 
     @BeforeEach
     void setUp() {
@@ -48,12 +48,13 @@ class InvoiceBatchSanitizerTest {
                 store.put(record.getInvoiceNumber(), record);
                 return record;
             });
-        service = serviceWith(new EinvoiceProperties(null, null));
+        sanitizer = sanitizerWith(new EinvoiceProperties(null, null));
     }
 
-    private InvoiceVerificationService serviceWith(EinvoiceProperties properties) {
-        return new InvoiceVerificationService(repository, parser,
-            Validation.buildDefaultValidatorFactory().getValidator(), properties);
+    private InvoiceBatchSanitizer sanitizerWith(EinvoiceProperties properties) {
+        InvoiceVerificationService verification = new InvoiceVerificationService(
+            repository, Validation.buildDefaultValidatorFactory().getValidator(), properties);
+        return new InvoiceBatchSanitizer(parser, verification, properties);
     }
 
     private static MockMultipartFile csv(String... rows) {
@@ -114,7 +115,7 @@ class InvoiceBatchSanitizerTest {
     @Test
     @DisplayName("A mixed batch splits into certified and intercepted rows")
     void mixedBatchIsSanitized() {
-        BatchUploadResponse response = service.processBatch(csv(
+        BatchUploadResponse response = sanitizer.processBatch(csv(
             CLEAN_ROW,
             "INV-2026-002,Koperasi Jaya,BRN,1234567890,998877665544,Admin Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
             "INV-2026-003,Syarikat Maju Jaya Sdn Bhd,BRN,202401009876,293847561012,Financing Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
@@ -135,7 +136,7 @@ class InvoiceBatchSanitizerTest {
     @Test
     @DisplayName("Malformed rows are persisted as rejections alongside clean rows")
     void malformedRowsArePersisted() {
-        service.processBatch(csv(
+        sanitizer.processBatch(csv(
             CLEAN_ROW,
             "INV-2026-009,Broken Sdn Bhd,BRN,202401001234,112233445566,Fee,1,oops,0.08,1080.00,1000.00,80.00,1080.00"));
 
@@ -147,7 +148,7 @@ class InvoiceBatchSanitizerTest {
     @Test
     @DisplayName("Rows without an invoice number are reported but not persisted")
     void rowsWithoutInvoiceNumberAreNotPersisted() {
-        BatchUploadResponse response = service.processBatch(csv(
+        BatchUploadResponse response = sanitizer.processBatch(csv(
             ",Nameless Sdn Bhd,BRN,202401001234,112233445566,Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00"));
 
         assertThat(response.rejected()).isEqualTo(1);
@@ -157,7 +158,7 @@ class InvoiceBatchSanitizerTest {
     @Test
     @DisplayName("A batch larger than the configured limit is rejected before processing")
     void batchExceedingRowLimitIsRejected() {
-        InvoiceVerificationService limited = serviceWith(
+        InvoiceBatchSanitizer limited = sanitizerWith(
             new EinvoiceProperties(new EinvoiceProperties.Rules(null, null, null, 1), null));
 
         assertThatThrownBy(() -> limited.processBatch(csv(

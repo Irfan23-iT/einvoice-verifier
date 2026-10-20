@@ -4,6 +4,7 @@ import io.github.irfan23it.einvoiceverifier.dto.BatchUploadResponse;
 import io.github.irfan23it.einvoiceverifier.dto.InvoiceRequest;
 import io.github.irfan23it.einvoiceverifier.dto.VerificationResponse;
 import io.github.irfan23it.einvoiceverifier.entity.InvoiceAuditRecord;
+import io.github.irfan23it.einvoiceverifier.service.InvoiceBatchSanitizer;
 import io.github.irfan23it.einvoiceverifier.service.InvoiceVerificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -20,9 +21,12 @@ import java.util.Locale;
 public class InvoiceController {
 
     private final InvoiceVerificationService verificationService;
+    private final InvoiceBatchSanitizer batchSanitizer;
 
-    public InvoiceController(InvoiceVerificationService verificationService) {
+    public InvoiceController(InvoiceVerificationService verificationService,
+                             InvoiceBatchSanitizer batchSanitizer) {
         this.verificationService = verificationService;
+        this.batchSanitizer = batchSanitizer;
     }
 
     @PostMapping("/verify")
@@ -41,7 +45,7 @@ public class InvoiceController {
         }
 
         try {
-            return ResponseEntity.ok(verificationService.processBatch(file));
+            return ResponseEntity.ok(batchSanitizer.processBatch(file));
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }

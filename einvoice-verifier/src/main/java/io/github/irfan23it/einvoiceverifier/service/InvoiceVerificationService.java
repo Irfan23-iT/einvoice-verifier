@@ -2,7 +2,6 @@ package io.github.irfan23it.einvoiceverifier.service;
 
 import io.github.irfan23it.einvoiceverifier.config.EinvoiceProperties;
 import io.github.irfan23it.einvoiceverifier.dto.BatchRowResult;
-import io.github.irfan23it.einvoiceverifier.dto.BatchUploadResponse;
 import io.github.irfan23it.einvoiceverifier.dto.InvoiceRequest;
 import io.github.irfan23it.einvoiceverifier.dto.LineItemRequest;
 import io.github.irfan23it.einvoiceverifier.dto.VerificationResponse;
@@ -11,8 +10,8 @@ import io.github.irfan23it.einvoiceverifier.repository.InvoiceAuditRepository;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -30,7 +29,6 @@ public class InvoiceVerificationService {
     private static final String STATUS_CERTIFIED = "CERTIFIED_LHDN";
 
     private final InvoiceAuditRepository repository;
-    private final CsvInvoiceBatchParser csvParser;
     private final Validator validator;
 
     private final Pattern tinPattern;
@@ -39,16 +37,13 @@ public class InvoiceVerificationService {
     private final String buyerIdPatternText;
     private final List<BigDecimal> allowedSstRates;
     private final String allowedSstRatesText;
-    private final int maxBatchRows;
     private final String uuidPrefix;
     private final String qrBaseUrl;
 
     public InvoiceVerificationService(InvoiceAuditRepository repository,
-                                      CsvInvoiceBatchParser csvParser,
                                       Validator validator,
                                       EinvoiceProperties properties) {
         this.repository = repository;
-        this.csvParser = csvParser;
         this.validator = validator;
 
         EinvoiceProperties.Rules rules = properties.rules();
@@ -60,7 +55,6 @@ public class InvoiceVerificationService {
         this.allowedSstRatesText = this.allowedSstRates.stream()
             .map(BigDecimal::toPlainString)
             .collect(Collectors.joining(", "));
-        this.maxBatchRows = rules.maxBatchRows();
 
         EinvoiceProperties.Gateway gateway = properties.gateway();
         this.uuidPrefix = gateway.uuidPrefix();
@@ -148,43 +142,24 @@ public class InvoiceVerificationService {
     }
 
     /**
-     * Sanitizes an uploaded CSV dump, running every row through the same rules as a
-     * single submission. Malformed rows are persisted as rejections rather than aborting the batch.
+     * Processes one parsed CSV row inside its own transaction.
+     *
+     * <p>{@code REQUIRES_NEW} is what gives the batch per-row isolation: the row commits (or rolls
+     * back) independently of every other row, so one unexpected failure can never discard verdicts
+     * that were already written.
      */
-    @Transactional
-    public BatchUploadResponse processBatch(MultipartFile file) {
-        List<CsvInvoiceBatchParser.ParsedRow> parsedRows = csvParser.parse(file);
-
-        if (parsedRows.size() > maxBatchRows) {
-            throw new IllegalArgumentException("Batch contains " + parsedRows.size()
-                + " row(s), which exceeds the configured limit of " + maxBatchRows + ".");
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public BatchRowResult processRow(CsvInvoiceBatchParser.ParsedRow row) {
+        if (row.request() != null) {
+            VerificationResponse response = verifyAndProcess(row.request());
+            return new BatchRowResult(row.rowNumber(), response.invoiceNumber(), response.status(),
+                response.errorCount(), response.errors(), response.lhdnUuid());
         }
 
-        List<BatchRowResult> results = new ArrayList<>();
-        int certified = 0;
-
-        for (CsvInvoiceBatchParser.ParsedRow row : parsedRows) {
-            BatchRowResult result;
-
-            if (row.request() != null) {
-                VerificationResponse response = verifyAndProcess(row.request());
-                result = new BatchRowResult(row.rowNumber(), response.invoiceNumber(), response.status(),
-                    response.errorCount(), response.errors(), response.lhdnUuid());
-            } else {
-                // Field-level parse defect: record the rejection when we at least know the invoice number.
-                persistRawRejection(row);
-                result = new BatchRowResult(row.rowNumber(), row.invoiceNumber(), STATUS_REJECTED,
-                    row.parseErrors().size(), row.parseErrors(), null);
-            }
-
-            if (result.certified()) {
-                certified++;
-            }
-            results.add(result);
-        }
-
-        return new BatchUploadResponse(file.getOriginalFilename(), results.size(), certified,
-            results.size() - certified, results);
+        // Field-level parse defect: record the rejection when we at least know the invoice number.
+        persistRawRejection(row);
+        return new BatchRowResult(row.rowNumber(), row.invoiceNumber(), STATUS_REJECTED,
+            row.parseErrors().size(), row.parseErrors(), null);
     }
 
     public List<InvoiceAuditRecord> getAuditRecords(String status) {

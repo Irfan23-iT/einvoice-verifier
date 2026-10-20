@@ -52,7 +52,7 @@ class InvoiceVerificationServiceTest {
 
     private InvoiceVerificationService serviceWith(EinvoiceProperties properties) {
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        return new InvoiceVerificationService(repository, new CsvInvoiceBatchParser(), validator, properties);
+        return new InvoiceVerificationService(repository, validator, properties);
     }
 
     /** Nulls exercise the record's built-in defaults, i.e. the documented LHDN baseline. */
