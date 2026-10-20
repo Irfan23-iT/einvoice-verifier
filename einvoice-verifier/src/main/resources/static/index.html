@@ -20,8 +20,45 @@
     </div>
   </header>
 
+  <!-- Executive KPI Summary Cards -->
+  <section class="max-w-6xl mx-auto px-6 pt-8">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Total Audited</div>
+        <div class="mt-2 flex items-baseline justify-between gap-2">
+          <div id="kpi-total" class="text-2xl font-bold text-slate-900">0</div>
+          <div id="kpi-gross" class="text-xs text-slate-500 font-medium font-mono whitespace-nowrap">RM 0.00</div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Pre-Flight Clearance</div>
+        <div class="mt-2 flex items-baseline justify-between gap-2">
+          <div id="kpi-clearance" class="text-2xl font-bold text-emerald-600">0.0%</div>
+          <div id="kpi-clearance-badge" class="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-medium whitespace-nowrap">Awaiting Volume</div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Defects Intercepted</div>
+        <div class="mt-2 flex items-baseline justify-between gap-2">
+          <div id="kpi-defects" class="text-2xl font-bold text-rose-600">0</div>
+          <div class="text-[10px] text-rose-700 bg-rose-50 px-2 py-0.5 rounded font-medium whitespace-nowrap">Rejected</div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <div class="text-xs uppercase font-semibold text-slate-500 tracking-wider">Sen-Drifts Caught</div>
+        <div class="mt-2 flex items-baseline justify-between gap-2">
+          <div id="kpi-sendrift" class="text-2xl font-bold text-amber-600">0</div>
+          <div class="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium whitespace-nowrap">&plusmn;0.01 Drift</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Main Container -->
-  <main class="max-w-6xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+  <main class="max-w-6xl mx-auto px-6 pb-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
 
     <!-- Left Column: Verification Form (7 cols) -->
     <section class="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -128,7 +165,10 @@
 
       <!-- Quick Metrics -->
       <div class="bg-slate-900 text-white rounded-xl p-5 shadow-sm">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Gateway Guard Telemetry</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Gateway Guard Telemetry</h3>
+          <span id="gatewayStatus" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">&#9679; Connecting</span>
+        </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <span class="text-2xl font-bold text-emerald-400" id="metricPassed">0</span>
@@ -194,7 +234,7 @@
             <option value="CERTIFIED_LHDN">Certified only</option>
             <option value="REJECTED_INTERNAL">Rejected only</option>
           </select>
-          <button onclick="fetchHistory()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1">
+          <button onclick="refreshAll()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1">
             <span>&circlearrowright; Refresh</span>
           </button>
         </div>
@@ -303,7 +343,7 @@
         });
         const data = await res.json();
         renderResult(data);
-        fetchHistory();
+        refreshAll();
       } catch (err) {
         renderResult({ status: 'REJECTED_INTERNAL', invoiceNumber: payload.invoiceNumber,
           errors: ['Transport failure: ' + err.message] });
@@ -408,7 +448,7 @@
           return;
         }
         renderBatch(data);
-        fetchHistory();
+        refreshAll();
       } catch (err) {
         setBatchStatus('Transport failure: ' + err.message, 'error');
       }
@@ -477,7 +517,6 @@
       const tbody = document.getElementById('historyTable');
       if (!Array.isArray(list) || list.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400">No records found.</td></tr>';
-        updateMetrics([]);
         return;
       }
 
@@ -486,12 +525,7 @@
         const detail = isPassed ? r.lhdnUuid : r.errorManifest;
         const attempts = r.attemptCount > 1 ? ' &bull; ' + r.attemptCount + ' attempts' : '';
         const verifiedAt = r.lastVerifiedAt || r.createdAt;
-        const verifiedLabel = verifiedAt
-          ? new Date(verifiedAt).toLocaleString('en-MY', {
-              year: 'numeric', month: '2-digit', day: '2-digit',
-              hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-            })
-          : '-';
+        const verifiedLabel = formatDate(verifiedAt);
         return `
           <tr class="hover:bg-slate-50">
             <td class="py-2.5 px-3 font-mono font-medium whitespace-nowrap">${escapeHtml(r.invoiceNumber)}</td>
@@ -511,19 +545,74 @@
           </tr>
         `;
       }).join('');
-
-      updateMetrics(list);
     }
 
-    function updateMetrics(list) {
-      const passed = list.filter(r => r.status === 'CERTIFIED_LHDN').length;
-      document.getElementById('metricPassed').innerText = passed;
-      document.getElementById('metricRejected').innerText = list.length - passed;
+    // ----------------------------------------------------------------- KPIs
+    function setGatewayStatus(online) {
+      const el = document.getElementById('gatewayStatus');
+      el.textContent = online ? '\u25CF LIVE' : '\u25CF OFFLINE';
+      el.className = 'text-[10px] font-bold uppercase tracking-wider ' +
+        (online ? 'text-emerald-400' : 'text-rose-400');
+    }
+
+    function applyMetrics(m) {
+      const total = Number(m.totalInvoices) || 0;
+      const certified = Number(m.certifiedCount) || 0;
+      const rejected = Number(m.rejectedCount) || 0;
+      const rate = Number(m.clearanceRatePercent) || 0;
+      const drifts = Number(m.senDriftDefectCount) || 0;
+      const gross = Number(m.totalGrossAudited) || 0;
+
+      document.getElementById('kpi-total').textContent = total.toLocaleString('en-MY');
+      document.getElementById('kpi-gross').textContent =
+        'RM ' + gross.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById('kpi-clearance').textContent = rate.toFixed(1) + '%';
+      document.getElementById('kpi-defects').textContent = rejected.toLocaleString('en-MY');
+      document.getElementById('kpi-sendrift').textContent = drifts.toLocaleString('en-MY');
+
+      const badge = document.getElementById('kpi-clearance-badge');
+      if (total === 0) {
+        badge.textContent = 'Awaiting Volume';
+        badge.className = 'text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-medium whitespace-nowrap';
+      } else if (rate >= 90) {
+        badge.textContent = 'Gateway Ready';
+        badge.className = 'text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-medium whitespace-nowrap';
+      } else {
+        badge.textContent = 'Review Required';
+        badge.className = 'text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium whitespace-nowrap';
+      }
+
+      document.getElementById('metricPassed').textContent = certified.toLocaleString('en-MY');
+      document.getElementById('metricRejected').textContent = rejected.toLocaleString('en-MY');
+    }
+
+    async function loadMetrics() {
+      try {
+        const res = await fetch('/api/einvoice/metrics');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        applyMetrics(await res.json());
+        setGatewayStatus(true);
+      } catch (err) {
+        console.error('Failed to load metrics', err);
+        setGatewayStatus(false);
+      }
+    }
+
+    function formatDate(isoDateString) {
+      if (!isoDateString) return '-';
+      return new Date(isoDateString).toLocaleString('en-MY', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+      });
+    }
+
+    async function refreshAll() {
+      await Promise.all([fetchHistory(), loadMetrics()]);
     }
 
     // Auto load a clean sample on page load
     loadSample(true);
-    fetchHistory();
+    refreshAll();
   </script>
 </body>
 </html>
