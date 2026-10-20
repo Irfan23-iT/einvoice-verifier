@@ -1,0 +1,9 @@
+# Local database storage
+data/
+*.mv.db
+*.trace.db
+
+# IDE configurations
+.vscode/
+.idea/
+*.iml
