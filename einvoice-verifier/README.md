@@ -238,9 +238,10 @@ cd einvoice-verifier
 ./mvnw test
 ```
 
-25 tests cover sen-level rounding, identity and TIN rules, the SST schedule, configuration
-overrides, null-safety, audit-trail refresh on resubmission, CSV parsing edge cases and batch
-aggregation.
+38 tests cover sen-level rounding, identity and TIN rules, the SST schedule, configuration
+overrides, null-safety, audit-trail refresh on resubmission, CSV parsing edge cases, batch
+aggregation, and the HTTP contract itself (status codes, malformed JSON, multipart handling and
+history filtering).
 
 ---
 

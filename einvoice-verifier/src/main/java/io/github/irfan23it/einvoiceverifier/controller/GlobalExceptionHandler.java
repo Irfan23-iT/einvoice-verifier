@@ -5,9 +5,11 @@ import io.github.irfan23it.einvoiceverifier.dto.VerificationResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -42,6 +44,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleResponseStatus(ResponseStatusException ex) {
         String reason = ex.getReason() != null ? ex.getReason() : "The request could not be processed.";
         return ResponseEntity.status(ex.getStatusCode()).body(new ApiError("REQUEST_REJECTED", reason));
+    }
+
+    /**
+     * A multipart request that omits the {@code file} part never reaches the controller, so it needs
+     * its own mapping; otherwise Spring's default error page would break the error contract.
+     */
+    @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<ApiError> handleMissingPart(Exception ex) {
+        return ResponseEntity.badRequest()
+            .body(new ApiError("REQUEST_REJECTED", "No CSV file was uploaded."));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
