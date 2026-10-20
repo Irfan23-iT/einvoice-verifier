@@ -37,11 +37,13 @@ public record EinvoiceProperties(Rules rules, Gateway gateway) {
         List<BigDecimal> allowedSstRates,
         int maxBatchRows
     ) {
+        /** Statutory TIN prefixes, or a bare 12-digit number. */
+        private static final String DEFAULT_TIN_PATTERN = "^(C|IG|SG|OG|D|PT|CS)?[0-9]{10,12}$";
         private static final String DEFAULT_ID_PATTERN = "^[0-9]{12}$";
 
         public Rules {
             if (tinPattern == null || tinPattern.isBlank()) {
-                tinPattern = DEFAULT_ID_PATTERN;
+                tinPattern = DEFAULT_TIN_PATTERN;
             }
             if (buyerIdPattern == null || buyerIdPattern.isBlank()) {
                 buyerIdPattern = DEFAULT_ID_PATTERN;

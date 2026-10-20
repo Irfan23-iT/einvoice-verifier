@@ -115,13 +115,45 @@ class InvoiceVerificationServiceTest {
     }
 
     @Test
-    @DisplayName("A TIN that is not 12 digits is intercepted")
-    void malformedTinIsRejected() {
-        VerificationResponse response = service.verifyAndProcess(withTin(validInvoice(), "C2938475610"));
+    @DisplayName("Statutory TIN prefixes and bare 12-digit TINs are certified")
+    void acceptedTinFormatsAreCertified() {
+        List<String> accepted = List.of(
+            "C1029384750", "IG1029384750", "SG1029384750", "OG1029384750",
+            "D1029384750", "PT1029384750", "CS1029384750", "102938475000");
 
-        assertThat(response.status()).isEqualTo("REJECTED_INTERNAL");
-        assertThat(response.errorCount()).isEqualTo(1);
-        assertThat(response.errors()).anyMatch(e -> e.contains("Malaysian TIN format"));
+        for (String tin : accepted) {
+            VerificationResponse response = service.verifyAndProcess(withTin(validInvoice(), tin));
+
+            assertThat(response.status()).as("TIN %s should be certified", tin).isEqualTo("CERTIFIED_LHDN");
+        }
+    }
+
+    @Test
+    @DisplayName("A TIN with an unauthorised prefix or stray symbol is intercepted")
+    void unauthorisedTinPrefixIsRejected() {
+        List<String> rejected = List.of("X1029384750", "C-1029384750", "C 1029384750", "C102938475A");
+
+        for (String tin : rejected) {
+            VerificationResponse response = service.verifyAndProcess(withTin(validInvoice(), tin));
+
+            assertThat(response.status()).as("TIN %s should be rejected", tin).isEqualTo("REJECTED_INTERNAL");
+            assertThat(response.errors()).anyMatch(e -> e.contains("Malaysian TIN format"));
+            assertThat(response.lhdnUuid()).isNull();
+        }
+    }
+
+    @Test
+    @DisplayName("A TIN with insufficient digits is intercepted")
+    void shortTinIsRejected() {
+        List<String> rejected = List.of("C10293847", "123456789");
+
+        for (String tin : rejected) {
+            VerificationResponse response = service.verifyAndProcess(withTin(validInvoice(), tin));
+
+            assertThat(response.status()).as("TIN %s should be rejected", tin).isEqualTo("REJECTED_INTERNAL");
+            assertThat(response.errorCount()).isEqualTo(1);
+            assertThat(response.errors()).anyMatch(e -> e.contains("Malaysian TIN format"));
+        }
     }
 
     @Test

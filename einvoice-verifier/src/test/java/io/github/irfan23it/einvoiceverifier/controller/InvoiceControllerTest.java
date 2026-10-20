@@ -99,7 +99,7 @@ class InvoiceControllerTest {
     void verifyRejectedPayload() throws Exception {
         String payload = VALID_PAYLOAD
             .replace("WEB-001", "WEB-002")
-            .replace("293847561012", "C2938475610");
+            .replace("293847561012", "X2938475610");
 
         MvcResult result = mockMvc.perform(post("/api/einvoice/verify")
                 .contentType(MediaType.APPLICATION_JSON)
