@@ -2,9 +2,10 @@
 
 **Project:** e-Invoice Pre-Flight Verification & Batch Sanitizer
 
-**Repository:** `https://github.com/Irfan23-iT/einvoice-verifier`
+**Repository:** `https://github.com/Irfan23-iT/einvoice-verifier` (private, `master`)
 **Last updated:** 2026-10-20
-**Status:** Feature-complete and tested.
+**Status:** Feature-complete, tested, and published as a personal project.
+
 
 ---
 
@@ -13,12 +14,12 @@
 | Area | State |
 | :--- | :--- |
 | Build | `mvnw clean package` → BUILD SUCCESS |
-| Tests | **39 passing**, 0 failures |
-| Runtime | Starts on port 8080 in ~4 s |
+| Tests | **41 passing**, 0 failures |
+| Runtime | Starts on port 8080 in ~5 s |
 | API | 3 endpoints implemented and exercised over HTTP |
 | Dashboard | Embedded Tailwind SPA: single verify, drag-and-drop batch, audit history |
 | Docs | README + Swagger UI (`/swagger-ui.html`) + this log |
-| Git | 4 commits, working tree clean, **no remote configured** |
+| Git | 10 commits on `master`, pushed to `origin`, working tree clean |
 
 ---
 
@@ -45,7 +46,7 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 | Runtime | Java 21 target, Java 25 in use | |
 | Framework | Spring Boot 4.1.1 | Initial spec used 3.3.x; kept 4.1.1 because it already built and ran |
 | Web / persistence / validation | Spring Web MVC, Spring Data JPA, Jakarta Bean Validation | |
-| Database | In-memory H2 | Zero-dependency deployment |
+| Database | File-backed H2 | Audit trail persists across restarts; `data/` is gitignored |
 | CSV | Apache Commons CSV 1.11.0 | RFC 4180 parsing instead of a hand-rolled splitter |
 | API docs | springdoc-openapi 3.1.1 | Upgraded from 2.5.0 — see §6 |
 | Frontend | Static `index.html` + Tailwind CDN | Served by Spring Boot at `/` |
@@ -60,6 +61,12 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 | `a513f08` | 2026-10-19 16:42 | Externalise business rules, validate TIN and SST, add README | 11 files, +587/−49 |
 | `c8ad02a` | 2026-10-20 09:15 | Cover the HTTP layer; close the missing-part error gap | 3 files, +296/−3 |
 | `089a542` | 2026-10-20 09:34 | Isolate batch rows in their own transactions | 7 files, +142/−57 |
+| `c1bb302` | 2026-10-20 10:32 | Add the progress log | 1 file, +260 |
+| `7171b29` | 2026-10-20 11:33 | Ignore local H2 data and IDE configuration | 2 files, +9/−4 |
+| `dd2346a` | 2026-10-20 11:35 | Persist the audit trail in file-backed H2 | 4 files, +8/−2 |
+| `6eba8b4` | 2026-10-20 11:36 | Accept statutory TIN prefixes in buyer validation | 4 files, +44/−10 |
+| `01adcd5` | 2026-10-20 11:41 | Make the audit table scroll cleanly and show full timestamps | 1 file, +21/−14 |
+| *(this commit)* | 2026-10-20 11:50 | Update README and progress log for the amended behaviour | 2 files, +46/−30 |
 
 ---
 
@@ -97,7 +104,7 @@ Every rule is externalised in `application.properties` and bound by `EinvoicePro
 
 | Rule | Property | Default |
 | :--- | :--- | :--- |
-| Buyer TIN format | `einvoice.rules.tin-pattern` | `^[0-9]{12}$` |
+| Buyer TIN format | `einvoice.rules.tin-pattern` | `^(C|IG|SG|OG|D|PT|CS)?[0-9]{10,12}$` |
 | Buyer identity (BRN / NRIC) | `einvoice.rules.buyer-id-pattern` | `^[0-9]{12}$` |
 | Approved Malaysian SST rates | `einvoice.rules.allowed-sst-rates` | `0.00,0.06,0.08` |
 | Maximum rows per upload | `einvoice.rules.max-batch-rows` | `5000` |
@@ -123,7 +130,10 @@ Rules can be overridden at startup without a rebuild, e.g.:
 
 ### 5.4 Audit trail
 
-- `InvoiceAuditRecord` is H2-backed and keyed on `invoiceNumber`.
+- `InvoiceAuditRecord` is stored in a file-backed H2 database (`./data/einvoicedb`), so the audit
+  trail survives a restart. The directory is gitignored; test runs use an isolated in-memory
+  profile (`src/test/resources/application-test.properties`).
+- Keyed on `invoiceNumber`.
 - Stores status, error manifest, total payable, mock LHDN UUID, QR URL, `createdAt`,
   `lastVerifiedAt`, and `attemptCount`.
 - Repeat submissions **refresh** every mutable field (via `applyVerification`) rather than mixing
@@ -133,7 +143,8 @@ Rules can be overridden at startup without a rebuild, e.g.:
 
 - Single-invoice form with one-click sample data.
 - Drag-and-drop / file-picker CSV upload with a per-row result table.
-- Audit history table with status metrics.
+- Audit history table with status metrics, horizontal scrolling and non-wrapping headers on narrow
+  viewports, and a full `dd MMM yyyy, hh:mm` timestamp per row.
 - All server-provided values are HTML-escaped before rendering.
 
 ### 5.6 Documentation and tooling
@@ -158,14 +169,18 @@ Rules can be overridden at startup without a rebuild, e.g.:
 | 7 | Any `sstRate` between 0 and 1 was accepted | No schedule check | Approved-rate check (`0.00 / 0.06 / 0.08` by default) |
 | 8 | Dashboard rendered server values as raw HTML | Unescaped interpolation | `escapeHtml(...)` on every server-provided value |
 | 9 | Verdict status was `"CERTIFIED_LHDN (UUID: ...)"` | Identifier embedded in the status string | Split into `status`, `lhdnUuid`, `qrCodeUrl` |
+| 10 | Statutory TINs such as `C1029384750` were rejected | TIN rule only allowed 12 bare digits | Pattern accepts the `C / IG / SG / OG / D / PT / CS` prefixes or a bare number |
+| 11 | Audit records vanished on restart | Database was in-memory | File-backed H2 at `./data/einvoicedb`; tests use an in-memory profile |
+| 12 | History table squeezed columns and hid "Last Verified" on narrow panes | Table could not scroll and only rendered a time | `overflow-x-auto` + `min-w-[900px]` + non-wrapping headers, and a full localised timestamp |
+| 13 | Local database files and IDE settings could be committed | No root `.gitignore`; `.vscode/` was tracked | Root `.gitignore` for `data/`, `*.mv.db`, `*.trace.db`, `.vscode/`, `.idea/`, `*.iml` |
 
 ---
 
-## 7. Test coverage — 39 tests
+## 7. Test coverage — 41 tests
 
 | Suite | Tests | Covers |
 | :--- | ---: | :--- |
-| `InvoiceVerificationServiceTest` | 16 | Rounding (HALF_UP), 10-digit BRN, TIN format, SST schedule, multi-item totals, null safety, empty items, blank invoice number, audit refresh on resubmission, configurable TIN/SST rules |
+| `InvoiceVerificationServiceTest` | 18 | Rounding (HALF_UP), 10-digit BRN, TIN formats and prefixes, SST schedule, multi-item totals, null safety, empty items, blank invoice number, audit refresh on resubmission, configurable TIN/SST rules |
 | `InvoiceBatchSanitizerTest` | 8 | Row parsing, quoted fields, non-numeric cells, missing columns, mixed batch split, malformed-row persistence, missing invoice number, row limit |
 | `InvoiceControllerTest` | 14 | `/verify` certified/rejected, malformed and empty JSON, wrong field types, batch split, non-CSV/empty/missing file, bad header, history ordering/filtering, **per-row isolation** |
 | `EinvoiceVerifierApplicationTests` | 1 | Context loads (binds `EinvoiceProperties`) |
@@ -191,7 +206,10 @@ All of the following were exercised against the running app, not just unit-teste
 | Sample 4-row CSV | 2 certified / 2 intercepted |
 | Malformed JSON | HTTP 400, `REJECTED_INTERNAL` envelope |
 | Bad CSV header / wrong extension / empty file | HTTP 400, `REQUEST_REJECTED` envelope |
-| 11-character TIN (`C2938475610`) | Rejected with the TIN format rule |
+| 11-character TIN (`C2938475610`) | Certified once the statutory prefixes were allowed |
+| Unauthorised TIN prefix (`X2938475610`) | Rejected with the TIN format rule |
+| Audit record across a full restart | `PERSIST-001` still returned by `/history` after stopping and restarting the service |
+| Narrow viewport (804 px) history table | Container scrolls (`scrollWidth 965 > clientWidth 691`); "Last Verified" shows `20 Oct 2026, 11:37 am • 2 attempts` |
 | SST `0.10` | Rejected as an unapproved rate |
 | SST `0.06` | Certified |
 | Startup override (`allowed-sst-rates=0.05`) | 8% rejected, 5% certified — proves rules bind from properties |
@@ -208,7 +226,7 @@ All of the following were exercised against the running app, not just unit-teste
 | QR is a verification **URL**, not an image | The spec requires a QR verification URL |
 | Validation invoked manually, not via `@Valid` on the controller | Keeps the single-submit and batch paths identical and the response shape uniform |
 | Problem-details advice disabled | Boot's own advice outranked the custom handler and changed the error shape |
-| In-memory H2 | Keeps the zero-dependency deployment; resets on restart |
+| File-backed H2 | Keeps the zero-dependency deployment while making the audit trail survive restarts |
 
 ---
 
@@ -216,14 +234,10 @@ All of the following were exercised against the running app, not just unit-teste
 
 - The LHDN gateway is simulated; identifiers and QR URLs are synthetic.
 - No authentication, authorisation or rate limiting.
-- The audit trail does not survive a restart (in-memory database).
+- The audit store is a single-node H2 file; production would use a managed database.
 - One line item per invoice payload and per CSV row.
 - History is unpaginated.
-- The dashboard history table squeezes columns on narrow viewports, and "Last Verified" shows time
-  without a date.
-- Repository has no remote; nothing has been pushed.
-- `.vscode/settings.json` is tracked at the repository root because the project's `.gitignore`
-  only covers the nested Maven directory.
+- QR rendering is deferred: the dashboard shows the verification URL, not a scannable image.
 
 ---
 
@@ -232,9 +246,7 @@ All of the following were exercised against the running app, not just unit-teste
 | Priority | Item | Notes |
 | :--- | :--- | :--- |
 | 1 | Render a scannable QR image | Currently the dashboard shows only the verification URL |
-| 2 | UI polish | Horizontal scroll / nowrap on the history table; show date + time |
-| 3 | Configure a git remote and push | `origin` is not set |
-| 4 | Optional | Pagination for `/history`, audit CSV export, multi-line invoices |
+| 2 | Optional | Pagination for `/history`, audit CSV export, multi-line invoices |
 
 ---
 
@@ -249,7 +261,7 @@ cd einvoice-verifier
 | :--- | :--- |
 | <http://localhost:8080/> | Dashboard |
 | <http://localhost:8080/swagger-ui.html> | Interactive API docs |
-| <http://localhost:8080/h2-console> | H2 console (`jdbc:h2:mem:einvoicedb`, `sa`, blank password) |
+| <http://localhost:8080/h2-console> | H2 console (`jdbc:h2:file:./data/einvoicedb`, `sa`, blank password) |
 
 Suggested demo flow:
 

@@ -20,7 +20,7 @@ Every verdict is persisted to an audit trail with the LHDN clearance identifier 
 | :--- | :--- |
 | Runtime | Java 21 (build target), Spring Boot 4.1.1 |
 | Web / persistence / validation | Spring Web MVC, Spring Data JPA, Jakarta Bean Validation |
-| Database | In-memory H2 (zero-dependency deployment) |
+| Database | File-backed H2 (zero external dependencies; survives restarts) |
 | CSV parsing | Apache Commons CSV (RFC 4180) |
 | API docs | springdoc-openapi / Swagger UI |
 | Frontend | Embedded single-page dashboard, Tailwind CSS |
@@ -42,9 +42,11 @@ Then open:
 | :--- | :--- |
 | <http://localhost:8080/> | Verification dashboard (single + batch) |
 | <http://localhost:8080/swagger-ui.html> | Interactive API documentation |
-| <http://localhost:8080/h2-console> | H2 console (JDBC URL `jdbc:h2:mem:einvoicedb`, user `sa`, blank password) |
+| <http://localhost:8080/h2-console> | H2 console (JDBC URL `jdbc:h2:file:./data/einvoicedb`, user `sa`, blank password) |
 
-The database is in-memory, so all audit records reset when the service restarts.
+The audit trail is written to `./data/einvoicedb` (relative to the Maven project directory) and is
+**not** reset when the service restarts. Delete the `data/` directory to start from a clean slate;
+it is gitignored, so local audit data never reaches the repository.
 
 ---
 
@@ -136,7 +138,7 @@ invoiceNumber,buyerName,buyerIdType,buyerIdValue,buyerTin,desc,qty,price,sstRate
 | `buyerName` | Buyer legal name |
 | `buyerIdType` | `BRN` (SSM company) or `NRIC` (individual MyKad) |
 | `buyerIdValue` | 12-digit identity number, no dashes |
-| `buyerTin` | Malaysian Tax Identification Number |
+| `buyerTin` | Malaysian Tax Identification Number: optional statutory prefix (`C`, `IG`, `SG`, `OG`, `D`, `PT`, `CS`) followed by 10–12 digits |
 | `desc` | Line item description |
 | `qty` / `price` | Quantity and unit price |
 | `sstRate` | Service tax rate as a decimal fraction, e.g. `0.08` for 8% |
@@ -158,7 +160,7 @@ code change**. Defaults are in `src/main/resources/application.properties`.
 
 | Rule | Property | Default |
 | :--- | :--- | :--- |
-| Buyer TIN format | `einvoice.rules.tin-pattern` | `^[0-9]{12}$` |
+| Buyer TIN format | `einvoice.rules.tin-pattern` | `^(C|IG|SG|OG|D|PT|CS)?[0-9]{10,12}$` |
 | Buyer identity (BRN / NRIC) | `einvoice.rules.buyer-id-pattern` | `^[0-9]{12}$` |
 | Approved Malaysian SST rates | `einvoice.rules.allowed-sst-rates` | `0.00,0.06,0.08` |
 | Maximum rows per upload | `einvoice.rules.max-batch-rows` | `5000` |
@@ -244,7 +246,8 @@ cd einvoice-verifier
 ./mvnw test
 ```
 
-39 tests cover sen-level rounding, identity and TIN rules, the SST schedule, configuration
+41 tests cover sen-level rounding, identity and TIN rules (including every statutory prefix),
+the SST schedule, configuration
 overrides, null-safety, audit-trail refresh on resubmission, CSV parsing edge cases, batch
 aggregation, per-row transaction isolation, and the HTTP contract itself (status codes, malformed
 JSON, multipart handling and history filtering).
@@ -256,6 +259,7 @@ JSON, multipart handling and history filtering).
 - The LHDN gateway is simulated: clearance identifiers and QR URLs are synthetically generated and
   not registered with any real system.
 - One line item per invoice (JSON) and per CSV row; multi-line invoices are not yet modelled.
-- The audit database is in-memory and does not survive a restart.
+- The audit store is a single-node H2 file suited to a demo deployment; production would use a
+  managed database.
 - OpenAPI documentation is intentionally enabled; set `springdoc.api-docs.enabled=false` and
   `springdoc.swagger-ui.enabled=false` for a locked-down deployment.
