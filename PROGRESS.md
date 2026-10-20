@@ -19,7 +19,7 @@
 | API | 3 endpoints implemented and exercised over HTTP |
 | Dashboard | Embedded Tailwind SPA: single verify, drag-and-drop batch, audit history |
 | Docs | README + Swagger UI (`/swagger-ui.html`) + this log |
-| Git | 16 commits on `master`, pushed to `origin`, working tree clean |
+| Git | 18 commits on `master`, pushed to `origin`, working tree clean |
 
 ---
 
@@ -72,7 +72,9 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 | `e53c7cb` | 2026-10-20 15:01 | Add the executive KPI metrics endpoint | 6 files, +194 |
 | `ac517e4` | 2026-10-20 15:01 | Pin the H2 console path | 1 file, +1 |
 | `7482149` | 2026-10-20 15:01 | Add executive KPI cards to the dashboard | 1 file, +107/−18 |
-| *(this commit)* | 2026-10-20 15:05 | Document the metrics engine and KPI dashboard | 2 files |
+| `22cf84e` | 2026-10-20 15:05 | Document the metrics engine and KPI dashboard | 2 files |
+| `e9893e5` | 2026-10-20 15:42 | Rebuild the dashboard visual system | 1 file, +476/−246 |
+| *(this commit)* | 2026-10-20 15:45 | Record the dashboard refinement | 1 file |
 
 ---
 
@@ -148,13 +150,19 @@ Rules can be overridden at startup without a rebuild, e.g.:
 
 ### 5.5 Dashboard
 
-- Single-invoice form with one-click sample data.
-- Drag-and-drop / file-picker CSV upload with a per-row result table.
-- Executive KPI bar: Total Audited (+ gross value), Pre-Flight Clearance with a dynamic
-  Gateway Ready / Review Required badge, Defects Intercepted, and Sen-Drifts Caught.
-- Gateway Guard telemetry panel carries a live status dot driven by the metrics call.
-- Audit history table with status metrics, horizontal scrolling and non-wrapping headers on narrow
-  viewports, and a full `dd/MM/yyyy, hh:mm:ss` timestamp per row.
+- Single-invoice form with one-click sample data, grouped into buyer identity, line item and invoice
+  totals; every control is label-associated and money fields carry a currency affordance.
+- Executive KPI bar: Total audited (+ total value), Pre-flight clearance with a dynamic
+  Gateway ready / Review required badge, Defects intercepted, and Sen-drifts caught.
+- Live gateway status pill in the header, driven by the metrics call, plus an "API docs" link.
+- A "Controls enforced" panel states the four pre-flight rules next to the result card, so the
+  verdict has visible context.
+- Certificates expose a one-click copy for the LHDN UUID and the validation URL as a link.
+- Drag-and-drop / file-picker CSV upload with a per-row result table, sticky header and summary.
+- Audit history table with a record count, verdict filter, sticky header, horizontal scrolling and
+  non-wrapping headers on narrow viewports, and a full `dd/MM/yyyy, hh:mm:ss` timestamp per row.
+- Layout verified at 800 px (single column, 2-up KPIs) and in a 12-column desktop composition;
+  hint text meets a 4.5:1 contrast ratio on white.
 - All server-provided values are HTML-escaped before rendering.
 
 ### 5.6 Documentation and tooling
@@ -240,8 +248,11 @@ All of the following were exercised against the running app, not just unit-teste
 | Narrow viewport (804 px) history table | Container scrolls (`scrollWidth 933 > clientWidth 691`); every data cell is `nowrap`; "Last Verified" shows `20/10/2026, 11:56:00 am` |
 | `GET /metrics` on an empty ledger | `0 / 0 / 0 / 0.0 / 0 / 0.00` |
 | Three submissions (1 certified, 1 arithmetic rejection, 1 format-only rejection) | `totalInvoices 3`, `certified 1`, `rejected 2`, `clearanceRatePercent 33.3`, `senDriftDefectCount 1`, `totalGrossAudited 3240.99` |
-| Dashboard after a form submission | KPI cards and telemetry refreshed to `4 audited / 50.0% / RM 4,320.99`, gateway status `● LIVE` |
-| KPI bar layout at 1000 px | Four equal 222 px cards on one row, 16 px gaps, no page overflow |
+| Dashboard after a form submission | KPI cards refreshed to `7 audited / 57.1% / 3 defects / 2 sen-drifts`, header status `● Live` |
+| Refined dashboard at 800 px | Single-column form, 2-up KPI cards, 321 px line-item fields, no page overflow |
+| Refined dashboard, 12-column composition | 7/5 form–result split, 4-up KPI row, no overlap, no page overflow |
+| Verdict panels | Certified card copies the UUID (`Copied` feedback) and links the validation URL; the rejection card lists 2 numbered errors |
+| Batch + audit tables | Sticky headers, 4-row batch summary (2 certified / 2 intercepted), 7-record ledger with verdict pills |
 | SST `0.10` | Rejected as an unapproved rate |
 | SST `0.06` | Certified |
 | Startup override (`allowed-sst-rates=0.05`) | 8% rejected, 5% certified — proves rules bind from properties |
