@@ -1,6 +1,7 @@
 package io.github.irfan23it.einvoiceverifier.service;
 
 import io.github.irfan23it.einvoiceverifier.config.EinvoiceProperties;
+import io.github.irfan23it.einvoiceverifier.dto.InvoiceMetricsResponse;
 import io.github.irfan23it.einvoiceverifier.dto.InvoiceRequest;
 import io.github.irfan23it.einvoiceverifier.dto.LineItemRequest;
 import io.github.irfan23it.einvoiceverifier.dto.VerificationResponse;
@@ -17,6 +18,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +46,23 @@ class InvoiceVerificationServiceTest {
                 store.put(record.getInvoiceNumber(), record);
                 return record;
             });
+
+        // Aggregations mirror what the real H2 queries would return for the current store.
+        when(repository.count()).thenAnswer(invocation -> (long) store.size());
+        when(repository.countByStatus(anyString())).thenAnswer(invocation ->
+            store.values().stream()
+                .filter(record -> Objects.equals(record.getStatus(), invocation.getArgument(0)))
+                .count());
+        when(repository.countSenDriftDefects()).thenAnswer(invocation ->
+            store.values().stream()
+                .filter(record -> record.getErrorManifest() != null
+                    && record.getErrorManifest().contains("Mismatch"))
+                .count());
+        when(repository.sumTotalPayable()).thenAnswer(invocation ->
+            store.values().stream()
+                .map(InvoiceAuditRecord::getTotalPayable)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
 
         service = serviceWith(defaultProperties());
     }
@@ -268,6 +287,57 @@ class InvoiceVerificationServiceTest {
 
         assertThat(sixPercent.status()).isEqualTo("REJECTED_INTERNAL");
         assertThat(sixPercent.errors()).anyMatch(e -> e.contains("not an approved Malaysian SST rate"));
+    }
+
+    // ------------------------------------------------------------------ metrics
+
+    @Test
+    @DisplayName("Every metric is zero on an empty ledger")
+    void metricsAreZeroOnAnEmptyLedger() {
+        InvoiceMetricsResponse metrics = service.getMetrics();
+
+        assertThat(metrics.totalInvoices()).isZero();
+        assertThat(metrics.certifiedCount()).isZero();
+        assertThat(metrics.rejectedCount()).isZero();
+        assertThat(metrics.clearanceRatePercent()).isEqualByComparingTo("0.0");
+        assertThat(metrics.senDriftDefectCount()).isZero();
+        assertThat(metrics.totalGrossAudited()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("Metrics aggregate verdicts, gross value and arithmetic defects")
+    void metricsAggregateVerdictsAndGross() {
+        // Certified: 1080.00
+        service.verifyAndProcess(validInvoice());
+        // Arithmetic rejection: one sen over, 1080.01
+        service.verifyAndProcess(
+            invoice("INV-M-002", "BRN", "202401009876", "0.08", "1080.00", "1000.00", "80.00", "1080.01"));
+        // Format-only rejection: 1080.00, and must not be counted as a sen drift.
+        service.verifyAndProcess(withTin(
+            invoice("INV-M-003", "BRN", "202401009876", "0.08", "1080.00", "1000.00", "80.00", "1080.00"),
+            "123456789"));
+
+        InvoiceMetricsResponse metrics = service.getMetrics();
+
+        assertThat(metrics.totalInvoices()).isEqualTo(3);
+        assertThat(metrics.certifiedCount()).isEqualTo(1);
+        assertThat(metrics.rejectedCount()).isEqualTo(2);
+        assertThat(metrics.clearanceRatePercent()).isEqualByComparingTo("33.3");
+        assertThat(metrics.senDriftDefectCount()).isEqualTo(1);
+        assertThat(metrics.totalGrossAudited()).isEqualByComparingTo("3240.01");
+    }
+
+    @Test
+    @DisplayName("Clearance rate is rounded half-up to one decimal place")
+    void clearanceRateUsesOneDecimalPlace() {
+        service.verifyAndProcess(validInvoice());
+        service.verifyAndProcess(
+            invoice("INV-M-010", "BRN", "202401009876", "0.08", "1080.00", "1000.00", "80.00", "1080.00"));
+        service.verifyAndProcess(withTin(
+            invoice("INV-M-011", "BRN", "202401009876", "0.08", "1080.00", "1000.00", "80.00", "1080.00"),
+            "123456789"));
+
+        assertThat(service.getMetrics().clearanceRatePercent()).isEqualByComparingTo("66.7");
     }
 
     // ------------------------------------------------------------- null-safety

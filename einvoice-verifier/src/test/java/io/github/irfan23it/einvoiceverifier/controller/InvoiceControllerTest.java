@@ -285,6 +285,37 @@ class InvoiceControllerTest {
             .andExpect(jsonPath("$.length()").value(0));
     }
 
+    // --------------------------------------------------------- GET /metrics
+
+    @Test
+    @DisplayName("Metrics are all zero on an empty ledger")
+    void metricsAreZeroOnAnEmptyLedger() throws Exception {
+        mockMvc.perform(get("/api/einvoice/metrics"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalInvoices").value(0))
+            .andExpect(jsonPath("$.certifiedCount").value(0))
+            .andExpect(jsonPath("$.rejectedCount").value(0))
+            .andExpect(jsonPath("$.clearanceRatePercent").value(0.0))
+            .andExpect(jsonPath("$.senDriftDefectCount").value(0))
+            .andExpect(jsonPath("$.totalGrossAudited").value(0.00));
+    }
+
+    @Test
+    @DisplayName("Metrics reflect verified activity, arithmetic defects and gross value")
+    void metricsReflectVerifiedActivity() throws Exception {
+        submit(VALID_PAYLOAD);
+        submit(VALID_PAYLOAD.replace("WEB-001", "WEB-003").replace("2160.00", "2160.01"));
+
+        mockMvc.perform(get("/api/einvoice/metrics"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalInvoices").value(2))
+            .andExpect(jsonPath("$.certifiedCount").value(1))
+            .andExpect(jsonPath("$.rejectedCount").value(1))
+            .andExpect(jsonPath("$.clearanceRatePercent").value(50.0))
+            .andExpect(jsonPath("$.senDriftDefectCount").value(1))
+            .andExpect(jsonPath("$.totalGrossAudited").value(4320.01));
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void submit(String payload) throws Exception {

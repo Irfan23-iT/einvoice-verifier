@@ -2,6 +2,7 @@ package io.github.irfan23it.einvoiceverifier.service;
 
 import io.github.irfan23it.einvoiceverifier.config.EinvoiceProperties;
 import io.github.irfan23it.einvoiceverifier.dto.BatchRowResult;
+import io.github.irfan23it.einvoiceverifier.dto.InvoiceMetricsResponse;
 import io.github.irfan23it.einvoiceverifier.dto.InvoiceRequest;
 import io.github.irfan23it.einvoiceverifier.dto.LineItemRequest;
 import io.github.irfan23it.einvoiceverifier.dto.VerificationResponse;
@@ -167,6 +168,34 @@ public class InvoiceVerificationService {
             return repository.findAllByOrderByIdDesc();
         }
         return repository.findByStatusOrderByIdDesc(status.trim().toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * Aggregates the audit ledger into the executive KPI snapshot.
+     *
+     * <p>Every figure is derived from persisted records, so it is stable across restarts and
+     * independent of any status filter applied to the history view.
+     */
+    public InvoiceMetricsResponse getMetrics() {
+        long total = repository.count();
+        long certified = repository.countByStatus(STATUS_CERTIFIED);
+        long rejected = repository.countByStatus(STATUS_REJECTED);
+        long senDrifts = repository.countSenDriftDefects();
+
+        BigDecimal gross = repository.sumTotalPayable();
+        if (gross == null) {
+            gross = BigDecimal.ZERO;
+        }
+        gross = gross.setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal clearanceRate = BigDecimal.ZERO.setScale(1);
+        if (total > 0) {
+            clearanceRate = BigDecimal.valueOf(certified)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP);
+        }
+
+        return new InvoiceMetricsResponse(total, certified, rejected, clearanceRate, senDrifts, gross);
     }
 
     /** Rejects any line whose service tax rate is not on the approved schedule. */
