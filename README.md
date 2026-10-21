@@ -299,3 +299,6 @@ itself (status codes, malformed JSON, multipart handling and history filtering).
   managed database.
 - OpenAPI documentation is intentionally enabled; set `springdoc.api-docs.enabled=false` and
   `springdoc.swagger-ui.enabled=false` for a locked-down deployment.
+
+  Author,
+  Mohamad Irfan Danish Bin Azani
