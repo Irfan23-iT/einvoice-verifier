@@ -27,6 +27,15 @@ Every verdict is persisted to an audit trail with the LHDN clearance identifier 
 
 ---
 
+## Project layout
+
+| Path | Contents |
+| :--- | :--- |
+| `einvoice-verifier/` | Maven project — application, tests and the bundled sample CSV |
+| `PROGRESS.md` | Development log: what was built, how it was verified, and the decisions behind it |
+
+---
+
 ## Running it
 
 The Maven project is nested one level below the repository root, so run the wrapper from there:
@@ -100,7 +109,7 @@ describing every defect found in that pass.
 
 ```bash
 curl -s -X POST http://localhost:8080/api/einvoice/upload-batch \
-  -F 'file=@src/main/resources/static/sample-billing-batch.csv'
+  -F 'file=@einvoice-verifier/src/main/resources/static/sample-billing-batch.csv'
 ```
 
 Returns per-row verdicts plus totals:
@@ -169,7 +178,7 @@ invoiceNumber,buyerName,buyerIdType,buyerIdValue,buyerTin,desc,qty,price,sstRate
 | `lineTotal` | Submitted line total including tax |
 | `subtotal` / `totalTax` / `totalPayable` | Submitted invoice header totals |
 
-A sample file is bundled at `src/main/resources/static/sample-billing-batch.csv` and is downloadable
+A sample file is bundled at `einvoice-verifier/src/main/resources/static/sample-billing-batch.csv` and is downloadable
 from the dashboard. It deliberately contains two clean rows and two defective rows.
 
 Parsing is tolerant: a malformed cell is reported as that row's defect rather than aborting the
@@ -180,7 +189,7 @@ whole file. Only an unusable file (missing header columns, unreadable stream) is
 ## Business rules
 
 Every rule below is externalised and can be tuned to match production specifications **without a
-code change**. Defaults are in `src/main/resources/application.properties`.
+code change**. Defaults are in `einvoice-verifier/src/main/resources/application.properties`.
 
 | Rule | Property | Default |
 | :--- | :--- | :--- |
@@ -219,6 +228,8 @@ whose total equals `subtotal + totalTax`, not the unrounded sum of the inputs.
 ---
 
 ## Architecture
+
+The package root is `einvoice-verifier/src/main/java/io/github/irfan23it/einvoiceverifier/`.
 
 ```
 config/
