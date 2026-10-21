@@ -43,7 +43,7 @@ class InvoiceControllerTest {
           "buyerIdValue": "202401009876",
           "buyerTin": "293847561012",
           "items": [
-            { "description": "Trade Facility Fee", "quantity": 1, "unitPrice": 2000.00,
+            { "description": "Implementation Fee", "quantity": 1, "unitPrice": 2000.00,
               "sstRate": 0.08, "lineTotal": 2160.00 }
           ],
           "subtotal": 2000.00,

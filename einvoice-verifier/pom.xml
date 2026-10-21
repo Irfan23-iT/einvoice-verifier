@@ -41,7 +41,7 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
-		<!-- RFC-4180 compliant CSV parsing for business batch dumps -->
+		<!-- RFC-4180 compliant CSV parsing for batch dumps -->
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-csv</artifactId>

@@ -30,7 +30,7 @@ class InvoiceBatchSanitizerTest {
         "invoiceNumber,buyerName,buyerIdType,buyerIdValue,buyerTin,desc,qty,price,sstRate,lineTotal,subtotal,totalTax,totalPayable";
 
     private static final String CLEAN_ROW =
-        "INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,102938475010,Trade Facility Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00";
+        "INV-2026-001,Maju Holdings Sdn Bhd,BRN,202401001111,102938475010,Implementation Fee,1,2000.00,0.08,2160.00,2000.00,160.00,2160.00";
 
     private final CsvInvoiceBatchParser parser = new CsvInvoiceBatchParser();
     private final Map<String, InvoiceAuditRecord> store = new HashMap<>();
@@ -82,7 +82,7 @@ class InvoiceBatchSanitizerTest {
     @DisplayName("Quoted fields containing commas and line-level blanks are handled")
     void quotedAndBlankFieldsAreHandled() {
         List<CsvInvoiceBatchParser.ParsedRow> rows = parser.parse(csv(
-            "INV-2026-002,\"Jaya, Koperasi Berhad\",BRN,1234567890,,Admin Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00"));
+            "INV-2026-002,\"Jaya, Koperasi Berhad\",BRN,1234567890,,Support Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00"));
 
         assertThat(rows.get(0).buyerName()).isEqualTo("Jaya, Koperasi Berhad");
         assertThat(rows.get(0).buyerTin()).isNull();
@@ -117,9 +117,9 @@ class InvoiceBatchSanitizerTest {
     void mixedBatchIsSanitized() {
         BatchUploadResponse response = sanitizer.processBatch(csv(
             CLEAN_ROW,
-            "INV-2026-002,Koperasi Jaya,BRN,1234567890,998877665544,Admin Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
+            "INV-2026-002,Koperasi Jaya,BRN,1234567890,998877665544,Support Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
             "INV-2026-003,Syarikat Maju Jaya Sdn Bhd,BRN,202401009876,293847561012,Financing Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.00",
-            "INV-2026-004,Defective Trading Enterprise,BRN,202401001234,112233445566,Guarantee Charge,1,1000.00,0.08,1080.00,1000.00,80.00,1080.01"));
+            "INV-2026-004,Defective Trading Enterprise,BRN,202401001234,112233445566,Retainer Fee,1,1000.00,0.08,1080.00,1000.00,80.00,1080.01"));
 
         assertThat(response.totalRows()).isEqualTo(4);
         assertThat(response.certified()).isEqualTo(2);
