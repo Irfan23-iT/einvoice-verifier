@@ -1,11 +1,9 @@
 # e-Invoice Pre-Flight Verifier — Development Log
 
 **Project:** e-Invoice Pre-Flight Verification & Batch Sanitizer
-
-**Repository:** `https://github.com/Irfan23-iT/einvoice-verifier` (private, `master`)
+**Repository:** `https://github.com/Irfan23-iT/einvoice-verifier` (public, `master`)
 **Last updated:** 2026-10-20
 **Status:** Feature-complete, tested, and published as a personal project.
-
 
 ---
 
@@ -16,10 +14,10 @@
 | Build | `mvnw clean package` → BUILD SUCCESS |
 | Tests | **47 passing**, 0 failures |
 | Runtime | Starts on port 8080 in ~5 s |
-| API | 3 endpoints implemented and exercised over HTTP |
-| Dashboard | Embedded Tailwind SPA: single verify, drag-and-drop batch, audit history |
+| API | 4 endpoints implemented and exercised over HTTP |
+| Dashboard | Embedded Tailwind SPA: KPIs, single verify, drag-and-drop batch, audit history |
 | Docs | README + Swagger UI (`/swagger-ui.html`) + this log |
-| Git | 18 commits on `master`, pushed to `origin`, working tree clean |
+| Git | 20 commits on `master`, pushed to `origin`, working tree clean |
 
 ---
 
@@ -55,29 +53,28 @@ persisted to an audit trail with the mock LHDN clearance identifier and the defe
 
 ## 4. Commit history
 
-| Commit | Date | Summary | Size |
-| :--- | :--- | :--- | :--- |
-| `43500e2` | 2026-10-19 15:55 | Complete e-Invoice pre-flight verifier and batch sanitizer | 26 files, +2288 |
-| `a513f08` | 2026-10-19 16:42 | Externalise business rules, validate TIN and SST, add README | 11 files, +587/−49 |
-| `c8ad02a` | 2026-10-20 09:15 | Cover the HTTP layer; close the missing-part error gap | 3 files, +296/−3 |
-| `089a542` | 2026-10-20 09:34 | Isolate batch rows in their own transactions | 7 files, +142/−57 |
-| `c1bb302` | 2026-10-20 10:32 | Add the progress log | 1 file, +260 |
-| `7171b29` | 2026-10-20 11:33 | Ignore local H2 data and IDE configuration | 2 files, +9/−4 |
-| `dd2346a` | 2026-10-20 11:35 | Persist the audit trail in file-backed H2 | 4 files, +8/−2 |
-| `6eba8b4` | 2026-10-20 11:36 | Accept statutory TIN prefixes in buyer validation | 4 files, +44/−10 |
-| `01adcd5` | 2026-10-20 11:41 | Make the audit table scroll cleanly and show full timestamps | 1 file, +21/−14 |
-| `5c23784` | 2026-10-20 11:50 | Update README and progress log for the amended behaviour | 2 files, +46/−30 |
-| `d187a30` | 2026-10-20 11:58 | Align the timestamp format and nowrap coverage with the amendment | 5 files |
-| `9f7f6d4` | 2026-10-20 15:01 | Add the high-priority hardening specification | 1 file, +306 |
-| `e53c7cb` | 2026-10-20 15:01 | Add the executive KPI metrics endpoint | 6 files, +194 |
-| `ac517e4` | 2026-10-20 15:01 | Pin the H2 console path | 1 file, +1 |
-| `7482149` | 2026-10-20 15:01 | Add executive KPI cards to the dashboard | 1 file, +107/−18 |
-| `22cf84e` | 2026-10-20 15:05 | Document the metrics engine and KPI dashboard | 2 files |
-| `e9893e5` | 2026-10-20 15:42 | Rebuild the dashboard visual system | 1 file, +476/−246 |
-| *(this commit)* | 2026-10-20 15:45 | Record the dashboard refinement | 1 file |
+| Date | Summary | Size |
+| :--- | :--- | :--- |
+| 2026-10-19 15:55 | Complete e-Invoice pre-flight verifier and batch sanitizer | 26 files, +2288 |
+| 2026-10-19 16:42 | Externalise business rules, validate TIN and SST, add README | 11 files, +587/−49 |
+| 2026-10-20 09:15 | Cover the HTTP layer; close the missing-part error gap | 3 files, +296/−3 |
+| 2026-10-20 09:34 | Isolate batch rows in their own transactions | 7 files, +142/−57 |
+| 2026-10-20 10:32 | Add the progress log | 1 file, +260 |
+| 2026-10-20 11:33 | Ignore local H2 data and IDE configuration | 2 files, +9/−4 |
+| 2026-10-20 11:35 | Persist the audit trail in file-backed H2 | 4 files, +8/−2 |
+| 2026-10-20 11:36 | Accept statutory TIN prefixes in buyer validation | 4 files, +44/−10 |
+| 2026-10-20 11:41 | Make the audit table scroll cleanly and show full timestamps | 1 file, +21/−14 |
+| 2026-10-20 11:50 | Update README and progress log for the amended behaviour | 2 files, +46/−30 |
+| 2026-10-20 11:58 | Align the timestamp format and nowrap coverage with the amendment | 5 files |
+| 2026-10-20 15:01 | Add the high-priority hardening specification | 1 file, +306 |
+| 2026-10-20 15:01 | Add the executive KPI metrics endpoint | 6 files, +194 |
+| 2026-10-20 15:01 | Pin the H2 console path | 1 file, +1 |
+| 2026-10-20 15:01 | Add executive KPI cards to the dashboard | 1 file, +107/−18 |
+| 2026-10-20 15:05 | Document the metrics engine and KPI dashboard | 2 files |
+| 2026-10-20 15:42 | Rebuild the dashboard visual system | 1 file, +476/−246 |
+| 2026-10-20 15:45 | Record the dashboard refinement | 1 file |
 
 ---
-
 ## 5. Work completed
 
 ### 5.1 Core domain and API
@@ -264,7 +261,7 @@ All of the following were exercised against the running app, not just unit-teste
 
 | Decision | Rationale |
 | :--- | :--- |
-| Spring Boot 4.1.1 instead of spec's 3.3.x | The project already built and ran; downgrading risked breaking a working baseline |
+| Spring Boot 4.1.1 instead of the spec's 3.3.x | The project already built and ran; downgrading risked breaking a working baseline |
 | One line item per invoice / CSV row | The CSV schema is flat; multi-line invoices are not modelled |
 | QR is a verification **URL**, not an image | The spec requires a QR verification URL |
 | Validation invoked manually, not via `@Valid` on the controller | Keeps the single-submit and batch paths identical and the response shape uniform |
